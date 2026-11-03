@@ -27,7 +27,9 @@ sequenceDiagram
 
 | 模块 | 责任 |
 | --- | --- |
+| [cli.py](../personal_agent/cli.py) | 定义和校验启动参数，读取单次任务提示文件 |
 | [main.py](../personal_agent/main.py)、[single_run.py](../personal_agent/single_run.py) | 交互式与单次任务入口、整轮错误处理、运行配置 |
+| [repl_commands.py](../personal_agent/repl_commands.py) | Skill 管理、评估、反馈及 Agent/Skill 列表命令；使用主循环提供的上下文与模型回调 |
 | [agent.py](../personal_agent/agent.py) | 有界循环、调用 ID 配对、连续只读工具有限并发 |
 | [llm.py](../personal_agent/llm.py)、[anthropic_adapter.py](../personal_agent/anthropic_adapter.py) | SDK 请求、协议适配、流式内容组装与完整性检查 |
 | [tool_registry.py](../personal_agent/tool_registry.py)、[permissions.py](../personal_agent/permissions.py) | 工具说明、参数校验、权限决策、审批与实际执行边界 |
