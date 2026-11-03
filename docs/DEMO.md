@@ -1,6 +1,6 @@
 # CI 演示：成功修复与回归拦截
 
-2026-11-03，在发布目录自己的新虚拟环境中执行：
+2026-11-03，初始公开提交 `1c9bd90` 在发布目录自己的新虚拟环境中执行：
 
 ```powershell
 .\.venv\Scripts\python.exe -X utf8 -B -m examples.ci_walkthrough

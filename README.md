@@ -1,5 +1,8 @@
 # Personal Agent
 
+[![Windows checks](https://github.com/yuhangchen0812/personal-agent/actions/workflows/windows-ci.yml/badge.svg?branch=main)](https://github.com/yuhangchen0812/personal-agent/actions/workflows/windows-ci.yml)
+[![Container acceptance](https://github.com/yuhangchen0812/personal-agent/actions/workflows/container-acceptance.yml/badge.svg?branch=main)](https://github.com/yuhangchen0812/personal-agent/actions/workflows/container-acceptance.yml)
+
 一个基于 Python 的命令行 Agent，支持工具调用、权限审批、会话恢复、Skills、子任务委派和 stdio MCP。提供可复现的 CI 失败诊断与修复演示，保留从证据、候选差异到测试和回滚的完整链路。
 
 > A Python CLI agent with tool permissions, resumable sessions, skills, MCP integration, and reproducible CI repair workflows.
@@ -101,5 +104,7 @@ playground/           文件工具的受控写入区域
 ## 验证与范围
 
 本仓库区分固定模型流程验证、真实本地工具执行和真实模型调用；测试数据为自编示例，不宣称通用修复成功率或模型能力提升。CI 工作流不需要模型密钥。
+
+本地运行 `.\verify.cmd` 即可执行 28 组默认离线验收，无需私人历史报告；只在显式添加 `--history` 时检查本机历史证据。
 
 [测试方法](docs/TESTING.md) · [本次发布核验](docs/VALIDATION.md) · [权限与数据说明](SECURITY.md) · [参与开发](CONTRIBUTING.md)

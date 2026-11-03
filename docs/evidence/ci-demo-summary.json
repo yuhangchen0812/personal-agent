@@ -191,5 +191,7 @@
     "examples/repair-eval/holdout-02/regression/test_regression.py": "7b5839d492fbf8cdf9a0be38d8af7fb5d2d11277e2eaaf14ee7f86f5c3849e4f",
     "examples/repair-eval/test-config.json": "b6d678d7fe3989ae4ca8c67d6fd6359775860a9d128266ac96a4117e6164be2a"
   },
-  "boundary": "sanitized derived summary, not an adoption receipt; regenerate local XML/logs by running examples.ci_walkthrough"
+  "boundary": "sanitized derived summary, not an adoption receipt; regenerate local XML/logs by running examples.ci_walkthrough",
+  "source_commit": "1c9bd900652eb8e250b875ffcef2de48303f7ee5",
+  "observation_scope": "initial public snapshot, preserved historical demonstration"
 }

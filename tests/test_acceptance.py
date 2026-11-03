@@ -23,6 +23,33 @@ raise SystemExit(int(code))
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_offline_acceptance_does_not_require_or_read_private_history(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with patch.object(acceptance, "DEFAULT_STAGES", ("local",)), \
+                 patch.object(acceptance, "source_state", return_value={"sha256": "fixture"}), \
+                 patch.object(acceptance, "environment_state", return_value={}), \
+                 patch.object(acceptance, "historical_evidence", side_effect=AssertionError("private history read")), \
+                 patch.object(acceptance, "run_stage", return_value={"stage": "local", "status": "passed"}), redirect_stdout(io.StringIO()):
+                report = acceptance.run_acceptance(root)
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["historical_evidence"]["status"], "not_requested")
+            self.assertFalse(report["history_required"])
+
+    def test_explicit_history_still_blocks_on_missing_or_failed_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with patch.object(acceptance, "DEFAULT_STAGES", ("local",)), \
+                 patch.object(acceptance, "source_state", return_value={"sha256": "fixture"}), \
+                 patch.object(acceptance, "environment_state", return_value={}), \
+                 patch.object(acceptance, "historical_evidence", return_value={"status": "failed"}) as history, \
+                 patch.object(acceptance, "run_stage", return_value={"stage": "local", "status": "passed"}), redirect_stdout(io.StringIO()):
+                report = acceptance.run_acceptance(root, check_history=True)
+            history.assert_called_once()
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["m3"]["local_baseline_status"], "passed")
+            self.assertTrue(report["history_required"])
+
     def command(self, root, name, status, code):
         script = root / "worker.py"
         script.write_text(FIXTURE, encoding="utf-8")

@@ -19,7 +19,7 @@ git push -u origin main
 
 如使用 ZIP，先解压；ZIP 不包含 .git，需要自行 git init、git add 和 git commit。上传前运行 git status，检查只有计划公开的文件。
 
-首次推送后查看 Actions 的实际运行结果，再决定是否在首页添加 CI badge。仓库当前未指定开源许可证；上传前可按作者选择补充许可证文件。
+仓库已提供指向 main 分支实际工作流状态的 CI badge。每次推送后查看对应提交的 Actions 结果。仓库当前未指定开源许可证；可按作者选择补充许可证文件。
 
 ## 项目展示要点
 

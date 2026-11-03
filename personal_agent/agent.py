@@ -3,6 +3,7 @@
 import json
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from pathlib import Path
 from threading import Event
 
@@ -72,7 +73,8 @@ def _execute_tool_batch(
             with ThreadPoolExecutor(max_workers=min(max_parallel_reads, len(group))) as pool:
                 futures = []
                 try:
-                    futures = [pool.submit(_execute_read_call, call, executor, event) for call in group]
+                    # Each worker inherits the caller's workspace and request scope in its own Context.
+                    futures = [pool.submit(copy_context().run, _execute_read_call, call, executor, event) for call in group]
                     # result() 按提交顺序读取；完成快的工具不会抢占别人的调用 ID。
                     for future in futures:
                         while True:
@@ -110,11 +112,11 @@ def run_agent_loop(
         message = call_model(messages, definitions)
         if not isinstance(message, dict) or message.get("role") != "assistant":
             raise ValueError("模型调用函数必须返回 assistant 消息字典。")
-        tool_calls = message.get("tool_calls") or []
+        tool_calls = message.get("tool_calls", [])
         if not isinstance(tool_calls, list):
             raise ValueError("tool_calls 必须是列表。")
         ids = [call.get("id") if isinstance(call, dict) else None for call in tool_calls]
-        if any(not isinstance(call_id, str) or not call_id for call_id in ids) or len(set(ids)) != len(ids):
+        if any(not isinstance(call_id, str) or not call_id.strip() for call_id in ids) or len(set(ids)) != len(ids):
             raise ValueError("同一消息中的工具调用 ID 必须非空且不重复。")
 
         if not tool_calls:

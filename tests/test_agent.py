@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 from personal_agent.agent import run_agent_loop
 from personal_agent.tool_registry import TOOL_ERROR_PREFIX, TOOL_REGISTRY, execute_tool
+from personal_agent.workspace import tool_workspace
 
 
 def tool_call(call_id, name, arguments):
@@ -26,6 +27,46 @@ def scripted_model(responses, requests):
 
 
 class AgentLoopTests(unittest.TestCase):
+    def test_parallel_reads_inherit_scoped_workspace_instead_of_outer_project(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            scoped = outer / "scoped"
+            scoped.mkdir()
+            for index in (1, 2):
+                (outer / f"file-{index}.txt").write_text("outer-project-data", encoding="utf-8")
+                (scoped / f"file-{index}.txt").write_text(f"scoped-{index}", encoding="utf-8")
+            messages = [{"role": "user", "content": "read scoped files"}]
+            responses = [
+                {"role": "assistant", "tool_calls": [tool_call(str(index), "read_file", {"file_path": f"file-{index}.txt"}) for index in (1, 2)]},
+                {"role": "assistant", "content": "done"},
+            ]
+            with patch("personal_agent.tools.PROJECT_ROOT", outer), tool_workspace(scoped):
+                self.assertEqual(run_agent_loop(messages, scripted_model(responses, []), max_parallel_reads=2), "done")
+            results = [message["content"] for message in messages if message["role"] == "tool"]
+            self.assertEqual(results, ["   1 | scoped-1", "   1 | scoped-2"])
+            self.assertNotIn("outer-project-data", str(messages))
+
+    def test_invalid_tool_call_container_does_not_change_history_or_execute(self):
+        for invalid in (None, {}, False, 0, ""):
+            with self.subTest(tool_calls=invalid):
+                messages = [{"role": "user", "content": "invalid response"}]
+                before = copy.deepcopy(messages)
+                dispatch = Mock()
+                response = {"role": "assistant", "content": "must not be accepted", "tool_calls": invalid}
+                with self.assertRaisesRegex(ValueError, "tool_calls"):
+                    run_agent_loop(messages, scripted_model([response], []), tool_executor=dispatch)
+                self.assertEqual(messages, before)
+                dispatch.assert_not_called()
+
+    def test_whitespace_call_id_is_rejected_before_any_tool_runs(self):
+        messages = [{"role": "user", "content": "invalid ID"}]
+        dispatch = Mock()
+        response = {"role": "assistant", "tool_calls": [tool_call("  ", "read_file", {"file_path": "file.txt"})]}
+        with self.assertRaisesRegex(ValueError, "ID"):
+            run_agent_loop(messages, scripted_model([response], []), tool_executor=dispatch)
+        self.assertEqual(len(messages), 1)
+        dispatch.assert_not_called()
+
     def test_tool_results_feed_back_before_final_answer(self):
         requests = []
         messages = [{"role": "user", "content": "找到并读取 greet"}]

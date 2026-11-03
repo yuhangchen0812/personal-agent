@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["personal_agent/**", "Dockerfile", ".dockerignore", "requirements.txt", ".github/workflows/container-acceptance.yml"]
+    paths: ["personal_agent/**", "examples/**", "playground/README.md", "Dockerfile", ".dockerignore", "requirements.txt", ".github/workflows/container-acceptance.yml"]
   pull_request:
-    paths: ["personal_agent/**", "Dockerfile", ".dockerignore", "requirements.txt", ".github/workflows/container-acceptance.yml"]
+    paths: ["personal_agent/**", "examples/**", "playground/README.md", "Dockerfile", ".dockerignore", "requirements.txt", ".github/workflows/container-acceptance.yml"]
 
 permissions:
   contents: read

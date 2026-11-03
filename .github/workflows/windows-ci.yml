@@ -25,16 +25,8 @@ jobs:
           python -m venv .venv
           .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
       - name: Run offline verification groups
-        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path .personal/ci -Force | Out-Null
-          $pythonExe = Join-Path $PWD '.venv/Scripts/python.exe'
-          $stageNames = & $pythonExe -c "from codex.verify_acceptance import DEFAULT_STAGES; print(' '.join(DEFAULT_STAGES))"
-          if ($LASTEXITCODE -ne 0) { throw 'Could not load verification groups' }
-          foreach ($stageName in $stageNames.Trim().Split(' ')) {
-            & $pythonExe -X utf8 -B codex/verify_acceptance.py --worker $stageName --result ".personal/ci/$stageName.json" 2>&1 | Tee-Object -FilePath ".personal/ci/$stageName.log"
-            if ($LASTEXITCODE -ne 0) { throw "Verification failed: $stageName" }
-          }
+          .\.venv\Scripts\python.exe -X utf8 -B codex/verify_acceptance.py --output-dir .personal/ci
       - name: Preserve verification output
         if: always()
         uses: actions/upload-artifact@v4

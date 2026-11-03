@@ -20,7 +20,19 @@
 
 ## 本地测试
 
-先检查核心循环与路径规则：
+运行完整的离线默认验收：
+
+```powershell
+.\verify.cmd
+```
+
+当前共 28 组，包含新增的 core_unit 核心回归组，以及工具、协议、恢复和应用集成组。总控保留逐组 JSON、日志及汇总，检查源码在运行前后是否一致；默认不请求模型、不要求私人历史文件。也可指定新报告目录：
+
+```powershell
+.\verify.cmd --output-dir .personal/verification-example
+```
+
+按文件检查核心循环与路径规则：
 
 ```powershell
 .\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p test_agent.py
@@ -28,13 +40,23 @@
 .\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p test_agent_config.py
 ```
 
-其余单元/集成测试使用同样的 unittest discovery 入口。tests 中部分用例复用 codex 验证模块，因此不要删除 codex Python 文件。
+全量 unittest discovery：
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p "test_*.py"
+```
+
+全量 unittest 和默认分组中存在共用流程，计数不能相加。tests 中部分用例复用 codex 验证模块，因此不要删除 codex Python 文件。
 
 ## GitHub Actions
 
-[Windows CI](../.github/workflows/windows-ci.yml) 调用既有 27 个默认本地验证组，分别保留 JSON 和日志，不配置模型密钥、不运行 live_smoke。容器配置有单独的[验收工作流](../.github/workflows/container-acceptance.yml)。工作流存在不等于远端已运行通过。
+[Windows CI](../.github/workflows/windows-ci.yml) 使用同一个总控运行 28 个默认组，保留逐组 JSON、日志、汇总和源码指纹，不配置模型密钥、不运行 live_smoke。容器配置有单独的[验收工作流](../.github/workflows/container-acceptance.yml)，镜像中 examples 或 playground/README.md 变化也会触发检查。
 
-验证器的默认总控和 verify.cmd 还包含开发期历史报告检查；公开仓库不分发本机原始历史记录。公开 CI 直接调用已有 worker 阶段，避免把历史文件存在性当成本次测试通过。默认总控若提示缺历史记录，应使用上述测试入口及公开 CI 的阶段命令，不能伪造历史文件。
+有完整本机历史报告时可显式使用 `.\verify.cmd --history`。此模式仍会核对历史字段和文件；缺失或失败会导致总结果失败，不会重新调用历史模型，也不会将缺失文件当作通过。
+
+汇总保留旧版 m3 兼容字段；本地总控不据此判断跨环境全面完成。实际部署结果以独立工作流和对应提交的报告为准。
+
+原始公开提交的 Windows 与 Linux 容器均已远端运行通过；后续提交应检查各自的实际工作流状态。验证范围和链接见 [VALIDATION.md](VALIDATION.md)。
 
 ## 怎样解释结果
 

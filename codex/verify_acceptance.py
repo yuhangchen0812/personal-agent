@@ -23,6 +23,7 @@ if str(ROOT) not in sys.path:
 
 
 STAGES = {
+    "core_unit": (),
     "delivery": ("codex.verify_delivery:run_joint",),
     "memory_cache": ("codex.verify_runtime_acceptance:verify_joint",),
     "compaction": ("codex.verify_compaction_routes:verify_routes", "codex.verify_compaction_routes:verify_compatibility"),
@@ -59,6 +60,11 @@ TEST_PATTERNS = (
     "test_cli_config.py", "test_single_run.py", "test_request_retry.py", "test_cancellation.py",
     "test_skill_background.py", "test_repl_commands.py", "test_skill_cache.py",
     "test_skill_task_eval.py",
+)
+CORE_TEST_PATTERNS = (
+    "test_agent.py", "test_tool_registry.py", "test_tools.py", "test_permissions.py",
+    "test_permission_execution.py", "test_session.py", "test_agent_config.py",
+    "test_plan.py", "test_plan_session.py", "test_acceptance.py",
 )
 EVIDENCE = (
     ("explore_mcp", "delivery-check-2026-10-29.json", ("live", "passed")),
@@ -102,7 +108,8 @@ def source_state():
         *sorted(path for path in (ROOT / "examples/rule-evidence").rglob("*") if path.is_file() and path.suffix in {".py", ".json"}),
         ROOT / "requirements.txt", ROOT / "requirements-dev.txt", ROOT / "run.cmd", ROOT / "run_agent.py", ROOT / "verify.cmd", ROOT / "task.cmd", ROOT / "run_task.py",
         ROOT / "demo.cmd", ROOT / "run_demo.py", ROOT / "Dockerfile", ROOT / ".dockerignore",
-        ROOT / ".github/workflows/container-acceptance.yml"]
+        *sorted((ROOT / ".github/workflows").glob("*.yml")),
+        *sorted((ROOT / ".github/workflows").glob("*.yaml"))]
     manifest = {path.relative_to(ROOT).as_posix(): sha256(path) for path in files}
     result = {"files": manifest, "sha256": hashlib.sha256(json.dumps(manifest, sort_keys=True).encode("utf-8")).hexdigest()}
     try:
@@ -163,13 +170,14 @@ def worker(stage, result_path):
     started = time.monotonic()
     report = {"stage": stage, "status": "failed", "validation": "current live smoke" if stage == "live_smoke" else "fixed model / actual local components"}
     try:
-        if stage == "protocol_cli":
+        if stage in {"core_unit", "protocol_cli"}:
+            patterns = CORE_TEST_PATTERNS if stage == "core_unit" else TEST_PATTERNS
             loader, suite = unittest.TestLoader(), unittest.TestSuite()
-            for pattern in TEST_PATTERNS:
+            for pattern in patterns:
                 suite.addTests(loader.discover(str(ROOT / "tests"), pattern=pattern))
             result = unittest.TextTestRunner(verbosity=2).run(suite)
             report.update(status="passed" if result.wasSuccessful() and result.testsRun > 0 and not result.skipped else "failed",
-                tests_run=result.testsRun, failures=len(result.failures), errors=len(result.errors), skipped=len(result.skipped), patterns=list(TEST_PATTERNS))
+                tests_run=result.testsRun, failures=len(result.failures), errors=len(result.errors), skipped=len(result.skipped), patterns=list(patterns))
         else:
             results = []
             for target in STAGES[stage]:
@@ -232,30 +240,34 @@ def run_stage(name, directory, *, command=None, timeout=180):
     return row
 
 
-def report_status(stages, evidence, *, include_live):
+def report_status(stages, evidence, *, include_live, require_history=False):
     required = [row for row in stages if include_live or row["stage"] != "live_smoke"]
     if any(row["status"] == "cancelled" for row in required):
         return "cancelled"
     expected = set(DEFAULT_STAGES) | ({"live_smoke"} if include_live else set())
     complete = len(required) == len(expected) and {row["stage"] for row in required} == expected
-    return "passed" if complete and all(row["status"] == "passed" for row in required) and evidence["status"] == "passed" else "failed"
+    history_ok = evidence["status"] == "passed" if require_history else True
+    return "passed" if complete and all(row["status"] == "passed" for row in required) and history_ok else "failed"
 
 
 def publish(directory, report):
     write_json(directory / "summary.json", report)
-    lines = ["# Personal Agent 当前环境基础验收", "", f"结果：{report['status']}；M3 全面完成：否。", "",
+    lines = ["# Personal Agent 当前环境基础验收", "", f"结果：{report['status']}。目标环境兼容性由独立验收记录说明。", "",
         "| 本轮阶段 | 状态 | 明细 | 日志 |", "| --- | --- | --- | --- |"]
     for row in report["stages"]:
         lines.append(f"| {row['stage']} | {row['status']} | [{row.get('detail', '未运行')}]({row.get('detail', 'summary.json')}) | [{row.get('log', '无')}]({row.get('log', 'summary.json')}) |")
     lines.extend(["", "本轮固定模型/本地组件与历史真实网络证据分别记录。历史文件存在不代表当前重新运行通过。", "",
-        "待完成：Anthropic 远端兼容及签名、容器构建/运行/持久化/信号，以及已记录的行为差异。", "",
+        "历史记录检查：" + report.get("historical_evidence", {}).get("status", "not_recorded") + "；仅 --history 显式启用时影响总结果。", "",
+        "此本地验收不替代原生服务兼容或实际部署环境验收；容器结果见独立工作流。", "",
         "没有广泛质量基准或泛化提升结论；默认只运行选定主链路和定向测试。"])
     (directory / "overview.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def run_acceptance(directory, *, include_live=False):
+def run_acceptance(directory, *, include_live=False, check_history=False):
     report = {"version": 1, "started_at": datetime.now(timezone.utc).isoformat(), "status": "running", "directory": str(directory),
-        "source": source_state(), "environment": environment_state(), "historical_evidence": historical_evidence(), "stages": [],
+        "source": source_state(), "environment": environment_state(),
+        "historical_evidence": historical_evidence() if check_history else {"status": "not_requested", "boundary": "historical files are not required for offline local acceptance"},
+        "history_required": check_history, "stages": [],
         "m3": {"complete": False, "remaining": ["anthropic_remote_and_signatures", "container_build_run_volumes_signals", "recorded_behavior_differences"],
             "quality_boundary": "authored demo tasks, not a broad quality benchmark"}}
     cancelled = False
@@ -278,7 +290,7 @@ def run_acceptance(directory, *, include_live=False):
     else:
         live = {"stage": "live_smoke", "status": "not_run", "reason": "not requested" if not include_live else "local checks did not pass"}
     report["stages"].append(live)
-    report["status"] = report_status(report["stages"], report["historical_evidence"], include_live=include_live)
+    report["status"] = report_status(report["stages"], report["historical_evidence"], include_live=include_live, require_history=check_history)
     after = source_state()
     report["source_unchanged_during_run"] = after["sha256"] == report["source"]["sha256"]
     if not report["source_unchanged_during_run"] and report["status"] != "cancelled":
@@ -292,6 +304,7 @@ def run_acceptance(directory, *, include_live=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true", help="本地主链路通过后，额外运行一次当前模型 explore/读取/MCP 冒烟；会产生实际用量")
+    parser.add_argument("--history", action="store_true", help="额外检查本机历史报告；缺失或失败时总结果失败，不会重新请求历史模型")
     parser.add_argument("--output-dir", type=Path, help="新报告目录；必须尚不存在，相对路径按调用方目录解析")
     parser.add_argument("--worker", choices=tuple(STAGES), help=argparse.SUPPRESS)
     parser.add_argument("--result", type=Path, help=argparse.SUPPRESS)
@@ -310,7 +323,7 @@ def main():
     except OSError:
         parser.error("报告目录不能创建或已存在；请选择新的 --output-dir。")
     try:
-        report = run_acceptance(directory, include_live=args.live)
+        report = run_acceptance(directory, include_live=args.live, check_history=args.history)
     except KeyboardInterrupt:
         summary = directory / "summary.json"
         report = json.loads(summary.read_text(encoding="utf-8")) if summary.exists() else {"version": 1, "stages": [], "m3": {"complete": False}}
