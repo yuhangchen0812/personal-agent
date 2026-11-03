@@ -2,7 +2,7 @@
 
 此自编工程用于实际产生包含失败、错误和跳过项的 JUnit XML。初始失败是样例的一部分，不代表主项目测试失败。
 
-运行入口与结果解释见[演示与测试](../../docs/TESTING.md)，真实任务见[使用指南](../../docs/USAGE.md)。
+源码仓库的运行入口与结果解释见[测试说明](https://github.com/yuhangchen0812/personal-agent/blob/main/docs/TESTING.md)，真实任务见[使用指南](https://github.com/yuhangchen0812/personal-agent/blob/main/docs/USAGE.md)。
 
 完整离线演示：
 

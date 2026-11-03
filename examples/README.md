@@ -2,7 +2,7 @@
 
 - `agents/`：自定义子 Agent 模板。
 - `skills/`：Skill 方法模板。
-- `mcp-config.json`、`mcp_server_demo.py`：本地 stdio MCP 配置和最小服务，配置入口见[使用指南](../docs/USAGE.md)。
+- `mcp-config.json`、`mcp_server_demo.py`：本地 stdio MCP 配置和最小服务，配置入口见[仓库使用指南](https://github.com/yuhangchen0812/personal-agent/blob/main/docs/USAGE.md)。
 - `tasks/ci-triage/SKILL.md`：CI 导入功能默认使用的方法模板。
 - `pytest-ci-demo/`：现有 CI 诊断功能使用的已知示例工程，包含故意失败的业务测试；它是功能示例数据，不是 Personal Agent 自身的回归测试。
 - `agent-loop-responses.json`：`python -m personal_agent.agent` 使用的固定响应示例。
