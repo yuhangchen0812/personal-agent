@@ -9,6 +9,7 @@
 !examples/**
 !playground/
 !playground/README.md
+!playground/文件读取示例.txt
 **/__pycache__
 **/*.pyc
 **/.env

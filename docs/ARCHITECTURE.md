@@ -31,6 +31,7 @@ sequenceDiagram
 | [main.py](../personal_agent/main.py)、[single_run.py](../personal_agent/single_run.py) | 交互式与单次任务入口、整轮错误处理、运行配置 |
 | [repl_commands.py](../personal_agent/repl_commands.py) | Skill 管理、评估、反馈及 Agent/Skill 列表命令；使用主循环提供的上下文与模型回调 |
 | [conversation.py](../personal_agent/conversation.py)、[project_memory.py](../personal_agent/project_memory.py) | 对话检查点、独立会话记忆、压缩，以及项目长期记忆的选择模式与索引缓存 |
+| [execution.py](../personal_agent/execution.py) | 请求上下文和 MCP 工具暴露记录、模型用途路由、预算与用量衔接、轮次保存和失败收尾 |
 | [agent.py](../personal_agent/agent.py) | 有界循环、调用 ID 配对、连续只读工具有限并发 |
 | [llm.py](../personal_agent/llm.py)、[anthropic_adapter.py](../personal_agent/anthropic_adapter.py) | SDK 请求、协议适配、流式内容组装与完整性检查 |
 | [tool_registry.py](../personal_agent/tool_registry.py)、[permissions.py](../personal_agent/permissions.py) | 工具说明、参数校验、权限决策、审批与实际执行边界 |
@@ -45,6 +46,8 @@ sequenceDiagram
 Session 保存对话与引用；Memory 提供请求参考；CI task 保存阶段检查点；repair 事务保存候选和原始字节。它们服务于不同的恢复需求。
 
 ConversationState 统一维护当前历史、轮次检查点和独立会话记忆引用；压缩或切换引用时，先保存会话，再更新运行中的状态。ProjectMemoryState 单独管理长期记忆的手动/自动选择和索引缓存。清空会话也先保存空历史，成功后再清理内存中的历史、记忆选择和自动压缩状态。
+
+RequestContext 在每次父模型请求时组装参考上下文，记录实际暴露的 MCP 工具；执行入口据此检查模型是否已取得对应定义。ModelRequests 区分父循环、子任务、摘要和技能评估的请求范围，预算检查在请求前执行，用量在 finally 中累计。TurnLifecycle 统一保存、审批前检查点和失败消息回退；回退历史不撤销已执行工具的副作用。
 
 恢复 Session 不会重放旧工具，也不会恢复旧授权。删除未完成消息不撤销文件或 Shell 副作用。源码恢复由明确的 repair rollback 完成，并检查当前文件版本，避免覆盖后续编辑。
 

@@ -64,6 +64,15 @@ def verify_workflow():
         help_result = subprocess.run([sys.executable, "-X", "utf8", "-B", str(unpacked / "run_agent.py"), "--help"], cwd=caller,
             env=environment, capture_output=True, timeout=60)
         assert help_result.returncode == 0 and b"--prompt" in help_result.stdout
+        # 固定模型的最终回答与退出码不证明读取成功，核对实际 read_file 返回值。
+        agent_result = subprocess.run(
+            [sys.executable, "-X", "utf8", "-B", "-m", "personal_agent.agent"], cwd=unpacked,
+            env=environment, capture_output=True, timeout=60,
+        )
+        agent_output = agent_result.stdout.decode("utf-8").replace("\r\n", "\n")
+        assert agent_result.returncode == 0
+        read_result = agent_output.split("工具结果 call_read_1：\n", 1)[1].split("\n\n", 1)[0]
+        assert "def greet(name):" in read_result and 'return f"你好，{name}！"' in read_result
         # 副本中放入私有运行文件及非占位配置，再从副本重新打包，确认均未导出。
         marker = "PACK_TEST_PRIVATE_MARKER"
         for relative in (".env", ".env.example", ".personal/private.json", ".venv/private.py", "playground/private.txt"):

@@ -83,6 +83,7 @@ def source_state():
         if path.is_file() and path.suffix in suffixes and "__pycache__" not in path.parts)
     files += [ROOT / name for name in ("requirements.txt", "requirements-dev.txt", "run.cmd", "run_agent.py",
         "verify.cmd", "task.cmd", "run_task.py", "demo.cmd", "run_demo.py", "Dockerfile", ".dockerignore")]
+    files += [ROOT / "playground/README.md", ROOT / "playground/文件读取示例.txt"]
     files += sorted((ROOT / ".github/workflows").glob("*.yml"))
     files += sorted((ROOT / ".github/workflows").glob("*.yaml"))
     manifest = {path.relative_to(ROOT).as_posix(): sha256(path) for path in files}

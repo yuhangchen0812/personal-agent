@@ -10,6 +10,7 @@ from .source_snapshot import digest
 
 ROOT = Path(__file__).resolve().parent.parent
 ROOT_FILES = {"run_agent.py", "run_task.py", "run_demo.py", "run.cmd", "task.cmd", "demo.cmd", "requirements.txt", ".env.example", "Dockerfile", ".dockerignore"}
+WORKSPACE_FILES = {"playground/README.md", "playground/文件读取示例.txt"}
 TEXT_SUFFIXES = {".py", ".md", ".json", ".jsonl", ".ini", ".toml", ".cfg", ".txt"}
 ENV_TEMPLATE = "# Supply credentials locally after extraction. Never commit this file with real keys.\nDASHSCOPE_API_KEY=\nPERSONAL_AGENT_PROTOCOL=openai\nANTHROPIC_API_KEY=\nANTHROPIC_MODEL=\n"
 README = """# Personal Agent 最小运行包
@@ -42,7 +43,7 @@ def _allowed(name):
             or any(part in {".", ".."} or part.casefold() in {".git", ".venv", ".personal", "reference", "__pycache__"}
                 or part.casefold().startswith(".env") and name != ".env.example" for part in path.parts)):
         return False
-    return name in ROOT_FILES | {"README.md", "playground/README.md"} or (len(path.parts) == 2 and path.parts[0] == "personal_agent" and path.suffix == ".py") or (
+    return name in ROOT_FILES | WORKSPACE_FILES | {"README.md"} or (len(path.parts) == 2 and path.parts[0] == "personal_agent" and path.suffix == ".py") or (
         len(path.parts) > 1 and path.parts[0] == "examples" and path.suffix in TEXT_SUFFIXES)
 
 
@@ -51,7 +52,8 @@ def create_package(output_dir):
     if directory.exists():
         raise ValueError("运行包输出须为新目录。")
     paths = [*(ROOT / name for name in sorted(ROOT_FILES - {".env.example"})), *sorted((ROOT / "personal_agent").glob("*.py")),
-        *sorted(path for path in (ROOT / "examples").rglob("*") if path.is_file() and _allowed(path.relative_to(ROOT).as_posix())), ROOT / "playground/README.md"]
+        *sorted(path for path in (ROOT / "examples").rglob("*") if path.is_file() and _allowed(path.relative_to(ROOT).as_posix())),
+        *(ROOT / name for name in sorted(WORKSPACE_FILES))]
     files = {path.relative_to(ROOT).as_posix(): plain_path(path).read_bytes() for path in paths}
     files["README.md"] = README.encode("utf-8")
     files[".env.example"] = ENV_TEMPLATE.encode("utf-8")

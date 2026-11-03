@@ -7,7 +7,7 @@ COPY requirements.txt ./requirements.txt
 RUN python -m pip install --no-cache-dir -r requirements.txt
 COPY personal_agent/ ./personal_agent/
 COPY examples/ ./examples/
-COPY playground/README.md ./playground/README.md
+COPY ["playground/README.md", "playground/文件读取示例.txt", "./playground/"]
 RUN mkdir -p /app/.personal /app/playground /home/agent \
     && chown -R 10001:10001 /app/.personal /app/playground /home/agent
 

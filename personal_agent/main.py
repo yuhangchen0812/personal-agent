@@ -14,23 +14,24 @@ from .repl_commands import (
 )
 
 from .agent import run_agent_loop
-from .agent_config import AgentDefinition, BUILTIN_AGENT_TYPES, discover_agents
+from .agent_config import BUILTIN_AGENT_TYPES, discover_agents
 from .context import AutoCompactPolicy
 from .conversation import ConversationState
+from .execution import ModelRequests, RequestContext, TurnLifecycle
 from .project_memory import ProjectMemoryState
 from .config import get_model_settings, model_config_scope
 from .cancellation import termination_requested, termination_scope
 from .llm import MAX_REQUEST_RETRIES, get_model_message, stream_model_message
-from .memory import select_relevant_memory, with_memory_context
+from .memory import select_relevant_memory
 from .permissions import READ_TOOLS, SUPPORTED_TOOLS, confirm_in_terminal
 from .mcp_client import McpError
 from .mcp_runtime import McpToolRuntime, load_mcp_config
 from .plan import PlanSession
-from .session import Session, validate_text_messages
-from .session_memory import SessionMemoryStore, generate_memory, with_session_memory
+from .session import Session
+from .session_memory import SessionMemoryStore, generate_memory
 from .single_run import SingleRun, print_report, run_once
 from .skill_search import (
-    format_retrieved_skill_context, retrieve_relevant_skills, with_skill_context,
+    format_retrieved_skill_context, retrieve_relevant_skills,
 )
 from .skill_evolution import SkillEvolutionStore
 from .skill_eval import SkillEvaluator
@@ -42,7 +43,7 @@ from .skills import (
     PreparedSkillCall, discover_skills, prepare_skill_call,
 )
 from .subagent import PlanFormatError, run_custom_agent, run_explore_agent, run_fork_skill, run_general_agent, run_plan_agent
-from .tool_registry import TOOL_ERROR_PREFIX, execute_tool, with_custom_agent_definitions
+from .tool_registry import TOOL_ERROR_PREFIX, execute_tool
 from .tool_search import DeferredToolCatalog
 from .usage import TokenPrices, UsageCallback, UsageStats
 
@@ -131,17 +132,15 @@ def _run_repl(
     usage_stats = UsageStats()
     evolution = SkillEvolutionStore()
     evaluator = SkillEvaluator()
-    lifecycle = SkillLifecycleStore()
+    skill_lifecycle = SkillLifecycleStore()
     conversation = ConversationState(
         messages, session=session, plan=plan, auto_compact=auto_compact,
         memory_store=memory_store, memory_record=restored_memory,
     )
     project_memory = ProjectMemoryState()
-    skill_context = ""
-    custom_agents: dict[str, AgentDefinition] = {}
     mcp = resources.enter_context(McpToolRuntime(load_mcp_config(mcp_config))) if mcp_config is not None else None
     tool_catalog = DeferredToolCatalog(mcp.definitions(), eager=mcp_eager) if mcp is not None else None
-    exposed_mcp_tools: set[str] = set()
+    request_context = RequestContext(conversation, project_memory, text_mode=text_mode, tool_catalog=tool_catalog)
     supported = SUPPORTED_TOOLS | (mcp.names if mcp is not None else set())
     for rules in (allow, deny):
         if rules is not None and (not isinstance(rules, list) or any(not isinstance(name, str) or name not in supported for name in rules)):
@@ -188,37 +187,17 @@ def _run_repl(
 
     conversation.checkpoint()
 
-    def save_progress(history: list[dict]) -> None:
-        if session is not None:
-            try:
-                snapshot = plan.snapshot() if session.with_tools else None
-                session.save(history, plan=snapshot)
-                if single_run is not None:
-                    single_run.session["saved"] = True
-            except (ValueError, OSError, RuntimeError) as error:
-                if single_run is not None:
-                    single_run.session["saved"] = False
-                    single_run.fail(error, phase="session_save")
-                print(f"会话保存失败：{error} 本轮仍在内存中，磁盘存档未更新。", file=sys.stderr)
-
-    def confirm_with_checkpoint(name: str, arguments: dict, reason: str) -> bool:
-        if single_run is not None:
-            print(f"单次模式不读取审批输入，拒绝本次确认：{name}。", file=sys.stderr)
-            return False
-        if name == "exit_plan_mode" and session is not None:
-            save_progress(conversation.completed_history)
-        return confirm_in_terminal(name, arguments, reason)
 
     def execute_with_permissions(name: str, arguments: dict, *, allow_skill_fork: bool = True) -> str:
         # 前台模型请求前已结算后台；并发只读工具仅检查预算，不回收 Future 或写候选。
         usage_stats.check_budget(prices, max_cost)
         result = execute_tool(
             name, arguments, allow=allow, deny=deny, confirm=confirm_with_checkpoint,
-            plan=plan, request_compaction=queue_compaction, delegate=delegate_agent, agent_types=list(custom_agents),
+            plan=plan, request_compaction=queue_compaction, delegate=delegate_agent, agent_types=list(request_context.custom_agents),
             fork_skill=delegate_skill if allow_skill_fork else None,
             mcp=mcp,
             search_tools=search_mcp_tools if tool_catalog is not None else None,
-            exposed_mcp_tools=exposed_mcp_tools,
+            exposed_mcp_tools=request_context.exposed_mcp_tools,
         )
         # 并发只读工具不改变 Plan；快照写入只留在主线程的状态/写入操作之后。
         if name not in READ_TOOLS and session is not None and session.with_tools and plan.plan_file is not None:
@@ -247,7 +226,7 @@ def _run_repl(
                 runner = {"explore": run_explore_agent, "plan": run_plan_agent, "general": run_general_agent}[agent_type]
                 result = runner(prompt, model, execute_subagent_tool, max_turns=max_turns)
             else:
-                definition = custom_agents.get(agent_type)
+                definition = request_context.custom_agents.get(agent_type)
                 if definition is None:
                     return f"{TOOL_ERROR_PREFIX}本轮没有可用的自定义 Agent：{agent_type}。"
                 result = run_custom_agent(prompt, definition, model, execute_subagent_tool, max_turns=max_turns)
@@ -267,84 +246,6 @@ def _run_repl(
     def search_mcp_tools(query: str, limit: int) -> str:
         return tool_catalog.search(query, limit, excluded_names=set(deny or []))
 
-    def request_model_with_context(messages: list[dict], definitions: list[dict], on_usage: UsageCallback) -> dict:
-        nonlocal exposed_mcp_tools
-        if not text_mode:
-            definitions = with_custom_agent_definitions(definitions, custom_agents)
-            if tool_catalog is not None:
-                active_definitions = tool_catalog.definitions()
-                exposed_mcp_tools = {tool["name"] for tool in active_definitions}
-                definitions = [*definitions, *active_definitions]
-            else:
-                definitions = [tool for tool in definitions if tool["name"] != "tool_search"]
-        messages = with_session_memory(messages, conversation.memory_record)
-        if project_memory.selected is not None:
-            messages = with_memory_context(messages, project_memory.selected)
-        messages = with_skill_context(messages, skill_context)
-        if not text_mode:
-            if session is not None:
-                context = f"当前权限模式：{plan.mode}。恢复的工具消息仅为历史，不要重放旧调用；历史批准不代表新操作已获授权。"
-                messages = [{"role": "system", "content": context}, *messages]
-            if plan.plan_file is not None:
-                messages = [{"role": "system", "content": plan.describe()}, *messages]
-        if stream:
-            started = False
-
-            def show_text(text: str) -> None:
-                nonlocal started
-                if not started:
-                    print("Personal Agent > ", end="", flush=True)
-                    started = True
-                print(text, end="", flush=True)
-
-            try:
-                if text_mode:
-                    message = stream_model_message(messages, on_text=show_text, on_usage=on_usage)
-                    validate_text_messages([messages[-1], message])
-                else:
-                    message = stream_model_message(messages, definitions, on_text=show_text, on_usage=on_usage)
-            finally:
-                if started:
-                    print(flush=True)
-            for call in message.get("tool_calls", []):
-                print(f"模型请求工具：{call['function']['name']}")
-            return message
-        if text_mode:
-            # 不发送工具定义，并在交给循环前拒绝非文本响应。
-            message = get_model_message(messages, on_usage=on_usage)
-            validate_text_messages([messages[-1], message])
-            return message
-        return _call_model_with_progress(messages, definitions, on_usage=on_usage)
-
-    def call_model_with_context(
-        messages: list[dict], definitions: list[dict], *, for_compaction: bool = False, for_subagent: bool = False,
-        for_skill_draft: bool = False,
-        for_skill_eval: bool = False, for_skill_judge: bool = False, for_skill_task_eval: bool = False, on_usage_observer: UsageCallback | None = None,
-    ) -> dict:
-        # 拦截发生在 finally 计数之外，未发出的请求不计为缺失用量。
-        settle_model_budget()
-        reported = None
-
-        def capture_usage(usage: dict | None) -> None:
-            nonlocal reported
-            reported = usage
-
-        try:
-            if for_skill_task_eval:
-                print("正在回放文件工具任务……")
-                return get_model_message(messages, definitions, on_usage=capture_usage, max_tokens=evaluation_settings["max_tokens"])
-            if for_compaction or for_skill_draft or for_skill_eval or for_skill_judge:
-                print("正在评审回放回答……" if for_skill_judge else "正在回放技能方法……" if for_skill_eval else "正在生成技能候选草稿……" if for_skill_draft else "正在生成接续摘要……")
-                return get_model_message(messages, on_usage=capture_usage, max_tokens=evaluation_settings["max_tokens"])
-            if for_subagent:
-                # 子任务使用自己的消息和非流式响应，共用同一预算检查及 finally 用量累计。
-                return _call_model_with_progress(messages, definitions, on_usage=capture_usage)
-            return request_model_with_context(messages, definitions, capture_usage)
-        finally:
-            # 失败的对话可以回滚，但已收到的用量不能随之抹掉。
-            usage_stats.record(reported)
-            if on_usage_observer is not None:
-                on_usage_observer(reported)
 
     def summarize_context(request: list[dict]) -> dict:
         return call_model_with_context(request, [], for_compaction=True)
@@ -375,6 +276,21 @@ def _run_repl(
         if completed is not None:
             print(format_skill_job(completed))
         usage_stats.check_budget(prices, max_cost)
+
+    turn_lifecycle = TurnLifecycle(
+        conversation, single_run=single_run, confirm_callback=lambda *args: confirm_in_terminal(*args),
+        finish_task=finish_skill_task,
+    )
+    save_progress = turn_lifecycle.save_progress
+    confirm_with_checkpoint = turn_lifecycle.confirm_with_checkpoint
+    model_requests = ModelRequests(
+        request_context, stream=stream, evaluation_settings=evaluation_settings,
+        usage_stats=usage_stats, before_request=settle_model_budget,
+        raw_model=lambda *args, **kwargs: get_model_message(*args, **kwargs),
+        stream_model=lambda *args, **kwargs: stream_model_message(*args, **kwargs),
+        model_with_progress=lambda *args, **kwargs: _call_model_with_progress(*args, **kwargs),
+    )
+    call_model_with_context = model_requests.call
 
     if session is not None and session.with_tools and not resume:
         save_progress(messages)
@@ -516,7 +432,7 @@ def _run_repl(
         if command == "/skill-uses":
             parts = user_input.split(maxsplit=1)
             try:
-                rows = list_skill_tasks(lifecycle, parts[1] if len(parts) == 2 else None)
+                rows = list_skill_tasks(skill_lifecycle, parts[1] if len(parts) == 2 else None)
                 feedback = evolution.list_records("feedback")
                 for row in rows:
                     row["feedback_ids"] = [item["id"] for item in feedback if item.get("task_use", {}).get("id") == row["id"]]
@@ -579,15 +495,15 @@ def _run_repl(
             conversation.clear_history()
             project_memory.reset()
             conversation.auto_compact.reset()
-            skill_context = ""
+            request_context.skill_context = ""
             if tool_catalog is not None:
                 tool_catalog.reset()
-            exposed_mcp_tools = set()
+            request_context.exposed_mcp_tools = set()
             print("当前会话历史已清空，记忆选用及自动选择已关闭；本次用量、预算和 Plan 状态保留。MCP 工具加载状态已重置。")
             continue
 
         if command in {"/skill-stats", "/skill-archive", "/skill-archives", "/skill-restore"}:
-            run_skill_lifecycle_command(command, user_input, lifecycle)
+            run_skill_lifecycle_command(command, user_input, skill_lifecycle)
             continue
 
         if command in {"/skill-eval", "/skill-eval-judge", "/skill-eval-tools", "/skill-evals", "/skill-champions"}:
@@ -676,8 +592,8 @@ def _run_repl(
                 conversation.auto_compact.remember(messages)
 
         conversation.begin_turn()
-        skill_context = ""
-        custom_agents = {}
+        request_context.skill_context = ""
+        request_context.custom_agents = {}
         learning.begin(turn_input)
         messages.append({"role": "user", "content": turn_input})
 
@@ -689,7 +605,7 @@ def _run_repl(
                     definitions, warnings = discover_agents()
                     for warning in warnings:
                         print(f"Agent 发现提示：{warning}", file=sys.stderr)
-                    custom_agents = {definition.name: definition for definition in definitions if definition.name not in BUILTIN_AGENT_TYPES}
+                    request_context.custom_agents = {definition.name: definition for definition in definitions if definition.name not in BUILTIN_AGENT_TYPES}
                 except (ValueError, OSError, RuntimeError) as error:
                     print(f"Agent 配置发现失败：{error} 本轮仅提供内置类型。", file=sys.stderr)
             if single_run is not None or not user_input.startswith("/"):
@@ -699,13 +615,13 @@ def _run_repl(
                     for warning in warnings:
                         print(f"技能发现提示：{warning}", file=sys.stderr)
                     hits = retrieve_relevant_skills(user_input, skills)
-                    skill_context = format_retrieved_skill_context(hits)
+                    request_context.skill_context = format_retrieved_skill_context(hits)
                     if hits:
                         for hit in hits:
                             record_skill_event(hit.skill, "retrieved", "candidate_context")
                         print("本轮相关技能候选：" + "、".join(hit.skill.name for hit in hits) + "。")
                 except (ValueError, OSError) as error:
-                    skill_context = ""
+                    request_context.skill_context = ""
                     print(f"技能候选检索失败：{error} 本轮不提供候选，继续当前任务。", file=sys.stderr)
             if project_memory.automatic and not fork_skill:
                 project_memory.select_for_turn(user_input, selector=select_relevant_memory, before_select=settle_model_budget)
@@ -718,23 +634,11 @@ def _run_repl(
                     record_skill_event(prepared_skill.skill, "inline_loaded", "manual")
                 assistant_reply = run_agent_loop(messages, call_model_with_context, max_turns=max_turns, tool_executor=execute_with_permissions)
         except KeyboardInterrupt as error:
-            finish_skill_task("cancelled")
-            if single_run is not None:
-                single_run.capture(conversation.turn_messages)
-                single_run.fail(error, cancelled=True)
-            conversation.rollback_turn()
-            if session is not None and session.with_tools:
-                save_progress(messages)
+            turn_lifecycle.fail_turn(error, cancelled=True)
             print("\n已中断本轮任务，本轮消息未保存。")
             continue
         except MODEL_API_ERRORS as error:
-            finish_skill_task("failed")
-            if single_run is not None:
-                single_run.capture(conversation.turn_messages)
-                single_run.fail(error)
-            conversation.rollback_turn()
-            if session is not None and session.with_tools:
-                save_progress(messages)
+            turn_lifecycle.fail_turn(error)
             status = getattr(error, "status_code", None)
             print(
                 f"本轮请求失败（{type(error).__name__}，状态码：{status}），本轮消息未保存。",
@@ -742,22 +646,13 @@ def _run_repl(
             )
             continue
         except (ValueError, OSError, RuntimeError) as error:
-            finish_skill_task("failed")
-            if single_run is not None:
-                single_run.capture(conversation.turn_messages)
-                single_run.fail(error)
-            conversation.rollback_turn()
-            if session is not None and session.with_tools:
-                save_progress(messages)
+            turn_lifecycle.fail_turn(error)
             print(f"本轮请求失败：{error} 本轮消息未保存。", file=sys.stderr)
             continue
 
         if not stream or fork_skill:
             print(f"Personal Agent > {assistant_reply}")
-        save_progress(messages)
-        finish_skill_task("loop_completed", assistant_reply)
-        if single_run is not None:
-            single_run.complete(assistant_reply, conversation.turn_messages)
+        turn_lifecycle.complete_turn(assistant_reply)
         if conversation.compaction_requested:
             conversation.compaction_requested = False
             try:
