@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "ci-triage",
+  "method": "SKILL.md",
+  "suites": {
+    "development": "development.json",
+    "holdout": "holdout.json"
+  }
+}

@@ -1,0 +1,16 @@
+# Deny by default; only the explicit application inputs enter the build context.
+**
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!personal_agent/
+!personal_agent/**
+!examples/
+!examples/**
+!playground/
+!playground/README.md
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+**/.personal

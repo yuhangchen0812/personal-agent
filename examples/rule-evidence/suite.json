@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "explicit-rule-evidence-v1-replay",
+  "cases": [
+    {
+      "id": "dev-metering",
+      "split": "development",
+      "project": "dev-metering/project",
+      "test_config": "test-config.json",
+      "regression_tests": "dev-metering/regression",
+      "rules": "dev-metering/rules.json"
+    },
+    {
+      "id": "holdout-tax",
+      "split": "holdout",
+      "project": "holdout-tax/project",
+      "test_config": "test-config.json",
+      "regression_tests": "holdout-tax/regression",
+      "rules": "holdout-tax/rules.json"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "repair-eval-local-v1",
+  "cases": [
+    {"id": "dev-01", "split": "development", "project": "dev-01/project", "test_config": "test-config.json", "regression_tests": "dev-01/regression"},
+    {"id": "dev-02", "split": "development", "project": "dev-02/project", "test_config": "test-config.json", "regression_tests": "dev-02/regression"},
+    {"id": "holdout-01", "split": "holdout", "project": "holdout-01/project", "test_config": "test-config.json", "regression_tests": "holdout-01/regression"},
+    {"id": "holdout-02", "split": "holdout", "project": "holdout-02/project", "test_config": "test-config.json", "regression_tests": "holdout-02/regression"}
+  ]
+}

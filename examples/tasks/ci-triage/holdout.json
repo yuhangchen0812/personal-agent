@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "mode": "file_tools",
+  "name": "ci-triage-holdout-v1",
+  "split": "holdout",
+  "skill_name": "ci-triage",
+  "cases": [
+    {
+      "id": "holdout-unicode",
+      "prompt": "CI 分诊保留样本 holdout-unicode：读取 playground/input/run.json 和 playground/input/results.jsonl，按方法生成 playground/output/triage.json 并核对；正确处理中文测试名、重试恢复和无效行。",
+      "files": {
+        "playground/input/run.json": "{\"run_id\":\"build-holdout-01\"}\n",
+        "playground/input/results.jsonl": "{\"test\":\"订单\",\"status\":\"failed\",\"message\":\"超时\"}\n{\"test\":\"支付\",\"status\":\"passed\"}\n{\"test\":\"订单\",\"status\":\"passed\"}\n{\"test\":\"搜索\",\"status\":\"failed\",\"message\":\"断言失败\"}\n{\"test\":\"\",\"status\":\"passed\"}\nnot-json\n"
+      },
+      "expected_files": {
+        "playground/output/triage.json": {"json": {"run_id": "build-holdout-01", "counts": {"total": 3, "passed": 2, "failed": 1, "skipped": 0}, "failures": [{"test": "搜索", "evidence": "playground/input/results.jsonl:4", "message": "断言失败"}], "invalid_lines": [{"line": 5, "reason": "invalid_record"}, {"line": 6, "reason": "invalid_json"}]}}
+      },
+      "required_tools": ["read_file", "write_file"]
+    },
+    {
+      "id": "holdout-no-valid-tests",
+      "prompt": "CI 分诊保留样本 holdout-no-valid-tests：从 playground/input/run.json 和 playground/input/results.jsonl 生成并读回 playground/output/triage.json；没有有效测试也要如实报告，不能把无数据当作 CI 全部通过。",
+      "files": {
+        "playground/input/run.json": "{\"run_id\":\"build-holdout-02\"}\n",
+        "playground/input/results.jsonl": "\n{bad\n{\"test\":\"future\",\"status\":\"queued\"}\n"
+      },
+      "expected_files": {
+        "playground/output/triage.json": {"json": {"run_id": "build-holdout-02", "counts": {"total": 0, "passed": 0, "failed": 0, "skipped": 0}, "failures": [], "invalid_lines": [{"line": 2, "reason": "invalid_json"}, {"line": 3, "reason": "invalid_status"}]}}
+      },
+      "required_tools": ["read_file", "write_file"]
+    }
+  ]
+}

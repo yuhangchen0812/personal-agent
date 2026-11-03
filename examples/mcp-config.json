@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "demo": {
+      "command": "{python}",
+      "args": ["-X", "utf8", "-B", "-u", "-m", "examples.mcp_server_demo"],
+      "cwd": "..",
+      "timeout": 5
+    }
+  }
+}

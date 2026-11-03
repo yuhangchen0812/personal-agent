@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "explain-function-development-demo",
+  "split": "development",
+  "skill_name": "explain-flow",
+  "cases": [
+    {
+      "id": "label-item",
+      "prompt": "请介绍下面的函数，只依据给定材料，不运行程序。label_item(name, prefix='item') 接收必填字符串 name 和可选字符串 prefix，返回 prefix + ':' + name 字符串。调用链：handle_input 收到名称后调用 label_item，再把返回字符串交给 display。",
+      "rules": {
+        "contains": ["参数", "返回值", "调用顺序"],
+        "not_contains": ["我已运行", "工具执行成功"],
+        "max_chars": 1500
+      }
+    }
+  ]
+}

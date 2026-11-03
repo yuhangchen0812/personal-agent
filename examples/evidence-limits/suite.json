@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "evidence-limits-v1",
+  "cases": [
+    {"id": "dev-metering", "split": "development", "project": "dev-metering/project", "test_config": "test-config.json", "regression_tests": "dev-metering/regression"},
+    {"id": "holdout-tax", "split": "holdout", "project": "holdout-tax/project", "test_config": "test-config.json", "regression_tests": "holdout-tax/regression"}
+  ]
+}

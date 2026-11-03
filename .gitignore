@@ -1,0 +1,29 @@
+# Environments and credentials
+/.venv/
+.env
+.env.*
+!.env.example
+/reference/
+
+# Private runtime data and local experiments
+/.personal/
+/playground/**
+!/playground/README.md
+!/playground/文件读取示例.txt
+/codex/*.json
+/codex/acceptance-runs/
+/codex/task-learning-runs/
+
+# Python and editor output
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+/build/
+/dist/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,39 @@
+name: Container acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["personal_agent/**", "Dockerfile", ".dockerignore", "requirements.txt", ".github/workflows/container-acceptance.yml"]
+  pull_request:
+    paths: ["personal_agent/**", "Dockerfile", ".dockerignore", "requirements.txt", ".github/workflows/container-acceptance.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - name: Build and verify offline container profile
+        run: python -m personal_agent.delivery container-check --output-dir .personal/container-ci
+      - name: Retain acceptance report and actual probe artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-acceptance
+          path: |
+            .personal/container-ci/report.json
+            .personal/container-ci/command-*.json
+            .personal/container-ci/command-*.log
+            .personal/container-ci/artifacts/
+            .personal/container-ci/workspace/
+          include-hidden-files: true

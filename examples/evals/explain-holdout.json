@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "explain-function-holdout-demo",
+  "split": "holdout",
+  "skill_name": "explain-flow",
+  "cases": [
+    {
+      "id": "scale-count",
+      "prompt": "请介绍下面的函数，只依据给定材料，不运行程序。函数 scale_count(n, factor=2) 返回 n * factor；n 是必填整数，factor 是可选整数且默认为 2。调用关系：controller 先取得 n，再调用 scale_count，最后把结果交给 renderer 展示。没有其他已知实现细节。",
+      "rules": {
+        "contains": ["参数", "返回值", "调用顺序"],
+        "not_contains": ["我已运行", "工具执行成功"],
+        "max_chars": 1500
+      }
+    }
+  ]
+}

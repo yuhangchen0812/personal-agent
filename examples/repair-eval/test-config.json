@@ -1,0 +1,1 @@
+{"version":1,"runner":"pytest","test_paths":["tests"],"timeout_seconds":15,"max_output_bytes":65536}

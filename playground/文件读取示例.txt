@@ -1,0 +1,8 @@
+Personal Agent 文件读取练习
+项目名称：Personal Agent
+练习目标：读取中文文本并显示行号
+
+def greet(name):
+    return f"你好，{name}！"
+
+本文件仅用于演示，不包含真实密钥。

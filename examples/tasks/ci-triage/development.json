@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "mode": "file_tools",
+  "name": "ci-triage-development-v1",
+  "split": "development",
+  "skill_name": "ci-triage",
+  "cases": [
+    {
+      "id": "dev-retry",
+      "prompt": "CI 分诊样本 dev-retry：读取 playground/input/run.json 与 playground/input/results.jsonl，按 ci-triage 方法生成 playground/output/triage.json 并读回；以最后有效结果汇总，不修改输入。",
+      "files": {
+        "playground/input/run.json": "{\"run_id\":\"build-dev-01\"}\n",
+        "playground/input/results.jsonl": "{\"test\":\"login\",\"status\":\"passed\"}\n{\"test\":\"cart\",\"status\":\"failed\",\"message\":\"timeout\"}\n{\"test\":\"search\",\"status\":\"skipped\"}\n{\"test\":\"cart\",\"status\":\"passed\"}\n"
+      },
+      "expected_files": {
+        "playground/output/triage.json": {"json": {"run_id": "build-dev-01", "counts": {"total": 3, "passed": 2, "failed": 0, "skipped": 1}, "failures": [], "invalid_lines": []}}
+      },
+      "required_tools": ["read_file", "write_file"]
+    },
+    {
+      "id": "dev-dirty",
+      "prompt": "CI 分诊样本 dev-dirty：实际读取 playground/input/run.json 与 playground/input/results.jsonl，输出并读回 playground/output/triage.json；保留失败证据行和无效行，不推测根因。",
+      "files": {
+        "playground/input/run.json": "{\"run_id\":\"build-dev-02\"}\n",
+        "playground/input/results.jsonl": "{\"test\":\"login\",\"status\":\"passed\"}\n{\"test\":\"checkout\",\"status\":\"failed\",\"message\":\"HTTP 500\"}\n{bad json\n{\"test\":\"search\",\"status\":\"skipped\"}\n{\"test\":\"checkout\",\"status\":\"failed\",\"message\":\"timeout after retry\"}\n{\"test\":\"ghost\",\"status\":\"queued\"}\n\n"
+      },
+      "expected_files": {
+        "playground/output/triage.json": {"json": {"run_id": "build-dev-02", "counts": {"total": 3, "passed": 1, "failed": 1, "skipped": 1}, "failures": [{"test": "checkout", "evidence": "playground/input/results.jsonl:5", "message": "timeout after retry"}], "invalid_lines": [{"line": 3, "reason": "invalid_json"}, {"line": 6, "reason": "invalid_status"}]}}
+      },
+      "required_tools": ["read_file", "write_file"]
+    }
+  ]
+}

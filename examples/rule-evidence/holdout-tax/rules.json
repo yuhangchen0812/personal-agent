@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "source": "Self-authored illustrative specification for rule-evidence/holdout-tax; supplied explicitly for this local demo only",
+  "revision": "demo-rule-v1",
+  "rules": [
+    {
+      "id": "employee-demo-rate",
+      "path": "withholding.py",
+      "function": "withholding_rate",
+      "source_sha256": "d8979c18f932d91b6ba5ad354d7c91554b46328b3b4fb63f3ea1264dac1d29e4",
+      "statement": "SELF-AUTHORED DEMO RULE, not actual tax advice. For the fixture identity employee-42 only, return the illustrative rate 0.21. Every other nonempty identity has no supplied rule and must keep raising LookupError. Empty identity must keep ValueError. No universal fallback is authorized."
+    }
+  ]
+}

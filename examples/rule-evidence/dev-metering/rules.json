@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "source": "Self-authored illustrative specification for rule-evidence/dev-metering; supplied explicitly for this local demo only",
+  "revision": "demo-rule-v1",
+  "rules": [
+    {
+      "id": "regulated-retention",
+      "path": "metering.py",
+      "function": "retention_days",
+      "source_sha256": "dea52548a7233084c13aa08ee782c62d333c21196f1ed7ac648be165bd158ee4",
+      "statement": "SELF-AUTHORED DEMO RULE, not a real retention policy. In this fixture, account exactly equal to regulated has a retention period of 90 days. Other nonempty accounts have no supplied rule and must keep raising LookupError. Empty account must keep ValueError. This document supplies the missing rule for that one account only; no global default is authorized."
+    }
+  ]
+}

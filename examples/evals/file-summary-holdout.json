@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "mode": "file_tools",
+  "name": "file-summary-holdout-demo",
+  "split": "holdout",
+  "skill_name": "file-summary",
+  "cases": [
+    {
+      "id": "batch-counts",
+      "prompt": "读取 playground/batches.json，根据各批次的 count 求和，并把结果写入 playground/summary.json。输出须为仅含 total_count、batch_count 两个键的 JSON 对象，分别表示数量合计和批次数。不得修改输入或创建其他任务文件。完成后简洁说明结果位置及验证依据。",
+      "files": {
+        "playground/batches.json": "{\"batches\":[{\"category\":\"book\",\"count\":3},{\"category\":\"pen\",\"count\":5},{\"category\":\"book\",\"count\":2}]}\n"
+      },
+      "expected_files": {
+        "playground/summary.json": {"json": {"total_count": 10, "batch_count": 3}}
+      },
+      "required_tools": ["read_file", "write_file"]
+    }
+  ]
+}
