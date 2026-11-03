@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_ci_repair import verify_cli, verify_guards, verify_recovery, verify_workflow
+from tests.support.verify_ci_repair import verify_cli, verify_guards, verify_recovery, verify_workflow
 
 
 class CiRepairTests(unittest.TestCase):

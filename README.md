@@ -25,7 +25,7 @@
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\demo.cmd doctor
 .\demo.cmd
 ```
@@ -44,7 +44,7 @@ CMD 复制文件使用 `copy .env.example .env`。环境变量优先于 `.env`�
 ## 一个有成功也有失败的完整演示
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -B -m examples.ci_walkthrough
+.\.venv\Scripts\python.exe -X utf8 -B -m tests.support.ci_walkthrough
 ```
 
 | 自编案例 | 候选公开测试 | 候选独立回归 | 流程结果 |
@@ -54,12 +54,12 @@ CMD 复制文件使用 `copy .env.example .env`。环境变量优先于 `.env`�
 
 脚本使用固定响应驱动真实 Agent Loop 和 pytest。输出目录为 `.personal/ci-walkthrough/随机ID`；原始示例不改写。公开测试通过并不代表修复可以采纳，详细证据见本次运行的 `report.json` 和页面。
 
-[查看发布版实跑的脱敏摘要](docs/DEMO.md)。
+此复现入口属于源码仓库的集成检查，依赖 `tests/fixtures/`，不随运行包分发。运行步骤见[CI 流程复现](docs/DEMO.md)。
 
 只观察 Agent Loop 的消息变化：
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -B -m examples.agent_loop_walkthrough
+.\.venv\Scripts\python.exe -X utf8 -B -m tests.support.agent_loop_walkthrough
 ```
 
 ## 执行链路
@@ -93,9 +93,11 @@ flowchart LR
 
 ```text
 personal_agent/       Agent 运行时、工具、协议和持久化
-examples/             方法模板、自编任务、演示及测试工程
-tests/                单元与集成测试
-codex/                测试共用的验证辅助模块
+examples/             可使用的 Skill/Agent/MCP 模板和 CI 示例工程
+tests/                正式回归测试
+  fixtures/           测试数据与自编失败工程
+  support/            共用集成检查和流程复现
+scripts/              仓库验证入口
 docs/                 运行、架构、验证和范围说明
 .github/              CI 与问题/PR 模板
 playground/           文件工具的受控写入区域
@@ -105,6 +107,18 @@ playground/           文件工具的受控写入区域
 
 本仓库区分固定模型流程验证、真实本地工具执行和真实模型调用；测试数据为自编示例，不宣称通用修复成功率或模型能力提升。CI 工作流不需要模型密钥。
 
-本地运行 `.\verify.cmd` 即可执行 28 组默认离线验收，无需私人历史报告；只在显式添加 `--history` 时检查本机历史证据。
+本地运行 `.\verify.cmd` 执行离线验证，也可运行 `python -m unittest discover -s tests`。正式测试只在源码仓库维护，不随运行包分发。
 
-[测试方法](docs/TESTING.md) · [本次发布核验](docs/VALIDATION.md) · [权限与数据说明](SECURITY.md) · [参与开发](CONTRIBUTING.md)
+## 下载与运行包
+
+源码仓库包含维护项目需要的测试和自动检查；运行包只包含应用、运行依赖清单、启动器及功能所需的示例。两者用途不同。
+
+在源码仓库生成运行包：
+
+```powershell
+.\demo.cmd pack --output-dir .personal/package
+```
+
+输出为 `personal-agent.zip` 和带 SHA256 的 `manifest.json`。运行包不包含 Python 或已安装依赖；解压后按包内 README 安装。当前未指定开源许可证。
+
+[测试方法](docs/TESTING.md) · [权限与数据说明](SECURITY.md) · [参与开发](CONTRIBUTING.md)

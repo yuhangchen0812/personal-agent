@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_diagnosis_followup import verify_guards, verify_workflow
+from tests.support.verify_diagnosis_followup import verify_guards, verify_workflow
 
 
 class DiagnosisFollowupTests(unittest.TestCase):

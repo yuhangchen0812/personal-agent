@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from codex import verify_acceptance as acceptance
+from scripts import verify as acceptance
 
 
 FIXTURE = '''import json,sys,time
@@ -23,32 +23,25 @@ raise SystemExit(int(code))
 
 
 class AcceptanceTests(unittest.TestCase):
-    def test_offline_acceptance_does_not_require_or_read_private_history(self):
+    def test_offline_acceptance_passes_using_current_results(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             with patch.object(acceptance, "DEFAULT_STAGES", ("local",)), \
                  patch.object(acceptance, "source_state", return_value={"sha256": "fixture"}), \
                  patch.object(acceptance, "environment_state", return_value={}), \
-                 patch.object(acceptance, "historical_evidence", side_effect=AssertionError("private history read")), \
                  patch.object(acceptance, "run_stage", return_value={"stage": "local", "status": "passed"}), redirect_stdout(io.StringIO()):
                 report = acceptance.run_acceptance(root)
             self.assertEqual(report["status"], "passed")
-            self.assertEqual(report["historical_evidence"]["status"], "not_requested")
-            self.assertFalse(report["history_required"])
 
-    def test_explicit_history_still_blocks_on_missing_or_failed_evidence(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            with patch.object(acceptance, "DEFAULT_STAGES", ("local",)), \
-                 patch.object(acceptance, "source_state", return_value={"sha256": "fixture"}), \
-                 patch.object(acceptance, "environment_state", return_value={}), \
-                 patch.object(acceptance, "historical_evidence", return_value={"status": "failed"}) as history, \
-                 patch.object(acceptance, "run_stage", return_value={"stage": "local", "status": "passed"}), redirect_stdout(io.StringIO()):
-                report = acceptance.run_acceptance(root, check_history=True)
-            history.assert_called_once()
-            self.assertEqual(report["status"], "failed")
-            self.assertEqual(report["m3"]["local_baseline_status"], "passed")
-            self.assertTrue(report["history_required"])
+    def test_missing_duplicate_or_live_stages_cannot_claim_complete(self):
+        with patch.object(acceptance, "DEFAULT_STAGES", ("first", "second")):
+            first = {"stage": "first", "status": "passed"}
+            second = {"stage": "second", "status": "passed"}
+            live = {"stage": "live_smoke", "status": "passed"}
+            self.assertEqual(acceptance.report_status([first], include_live=False), "failed")
+            self.assertEqual(acceptance.report_status([first, first], include_live=False), "failed")
+            self.assertEqual(acceptance.report_status([first, second], include_live=True), "failed")
+            self.assertEqual(acceptance.report_status([first, second, live], include_live=True), "passed")
 
     def command(self, root, name, status, code):
         script = root / "worker.py"
@@ -64,7 +57,6 @@ class AcceptanceTests(unittest.TestCase):
             with patch.object(acceptance, "DEFAULT_STAGES", ("first", "second")), \
                  patch.object(acceptance, "source_state", return_value={"sha256": "fixture"}), \
                  patch.object(acceptance, "environment_state", return_value={}), \
-                 patch.object(acceptance, "historical_evidence", return_value={"status": "passed"}), \
                  patch.object(acceptance, "run_stage", side_effect=stage), redirect_stdout(io.StringIO()):
                 report = acceptance.run_acceptance(root)
             self.assertEqual([row["status"] for row in report["stages"]], ["failed", "passed", "not_run"])
@@ -73,8 +65,7 @@ class AcceptanceTests(unittest.TestCase):
             self.assertIn("fixture worker", (root / "first.log").read_text(encoding="utf-8"))
             bad_exit = original("bad_exit", root, command=self.command(root, "bad_exit", "passed", 7))
             self.assertEqual((bad_exit["status"], bad_exit["returncode"]), ("failed", 7))
-            self.assertFalse(report["m3"]["complete"])
-            self.assertEqual(acceptance.report_status([], {"status": "passed"}, include_live=False), "failed")
+            self.assertEqual(acceptance.report_status([], include_live=False), "failed")
 
     def test_timeout_is_failed_and_worker_cancellation_stops_later_stages(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -89,7 +80,6 @@ class AcceptanceTests(unittest.TestCase):
             with patch.object(acceptance, "DEFAULT_STAGES", ("first", "second")), \
                  patch.object(acceptance, "source_state", return_value={"sha256": "fixture"}), \
                  patch.object(acceptance, "environment_state", return_value={}), \
-                 patch.object(acceptance, "historical_evidence", return_value={"status": "passed"}), \
                  patch.object(acceptance, "run_stage", side_effect=cancel), redirect_stdout(io.StringIO()):
                 report = acceptance.run_acceptance(root, include_live=True)
             self.assertEqual(report["status"], "cancelled")

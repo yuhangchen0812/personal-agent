@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_skill_learning import verify_workflow
+from tests.support.verify_skill_learning import verify_workflow
 
 
 class SkillLearningTests(unittest.TestCase):

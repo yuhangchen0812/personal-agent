@@ -37,7 +37,7 @@ class CompactToolSmokeTest(unittest.TestCase):
             {"role": "user", "content": "目标整理只读报告，保留 T-31。" + "背景材料。" * 700},
             {"role": "assistant", "content": "已记录目标，尚未执行写入。"},
         ]
-        from codex.verify_session_memory import memory
+        from tests.support.verify_session_memory import memory
         summary = memory()
         summary["episode_memory"]["task_description"] = "整理只读报告 T-31。"
         requests = []

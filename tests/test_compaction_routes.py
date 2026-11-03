@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_compaction_routes import verify_compatibility, verify_routes
+from tests.support.verify_compaction_routes import verify_compatibility, verify_routes
 
 
 class CompactionRoutesTests(unittest.TestCase):

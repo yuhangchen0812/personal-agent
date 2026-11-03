@@ -10,7 +10,7 @@ from unittest.mock import patch
 import httpx2
 from anthropic import Anthropic
 
-from codex.verify_anthropic_stream import EventBody, stream_events, verify_offline
+from tests.support.verify_anthropic_stream import EventBody, stream_events, verify_offline
 from personal_agent.main import run_repl
 from personal_agent.session import Session
 

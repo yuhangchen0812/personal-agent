@@ -8,7 +8,7 @@
 
 当前重点是 Windows CLI 和自编任务的可复现流程。固定响应与实际工具执行分别记录；真实 Qwen 运行曾用于协议和工具链检查，不据此给出通用修复准确率。
 
-Linux 文件型容器已在 GitHub Actions 的 Ubuntu 24.04 环境实际通过构建、非 root/只读/断网运行、卷持久化、新进程恢复和外部 SIGTERM/143 检查；具体提交和运行链接见 [VALIDATION.md](VALIDATION.md)。这一结果不覆盖所有 Linux 主机、Windows Shell 工具或真实模型推理。
+Linux 文件型容器有独立的构建、非 root/只读/断网运行、卷持久化、新进程恢复和外部 SIGTERM/143 检查；请以对应提交的 GitHub Actions 结果为准，入口见[测试说明](TESTING.md)。这些检查不覆盖所有 Linux 主机、Windows Shell 工具或真实模型推理。
 
 原生 Anthropic 远端思考签名兼容仍待实跑。千问 Messages 网关的空签名兼容不等于原生签名验收。
 

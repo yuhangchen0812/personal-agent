@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_rule_evidence import verify_guards, verify_workflow
+from tests.support.verify_rule_evidence import verify_guards, verify_workflow
 
 
 class RuleEvidenceTests(unittest.TestCase):

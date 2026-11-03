@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_ci_tasks import verify_failures, verify_workflow
+from tests.support.verify_ci_tasks import verify_failures, verify_workflow
 
 
 class TaskRunnerTests(unittest.TestCase):

@@ -11,7 +11,7 @@ from unittest.mock import patch
 import httpx2
 from openai import AuthenticationError
 
-from codex.verify_single_run import invoke, tool, verify_offline
+from tests.support.verify_single_run import invoke, tool, verify_offline
 from personal_agent.main import main
 from personal_agent.session import Session
 

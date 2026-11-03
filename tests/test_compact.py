@@ -40,7 +40,7 @@ class CompactSmokeTest(unittest.TestCase):
             {"role": "assistant", "content": "下一步整理提纲，不执行写入。"},
             *recent,
         ]
-        from codex.verify_session_memory import memory
+        from tests.support.verify_session_memory import memory
         summary = memory()
         summary["episode_memory"]["task_description"] = "整理报告，保留标识 R-17。"
         requests = []

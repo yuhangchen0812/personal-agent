@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_task_learning import verify_guards, verify_workflow
+from tests.support.verify_task_learning import verify_guards, verify_workflow
 
 
 class TaskLearningTests(unittest.TestCase):

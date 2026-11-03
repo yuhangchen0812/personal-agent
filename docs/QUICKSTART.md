@@ -10,12 +10,12 @@
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\demo.cmd doctor
 .\demo.cmd
 ```
 
-只运行基础 Agent 可安装 `requirements.txt`；CI 演示和开发测试需要 `requirements-dev.txt` 中的 pytest。`doctor` 只报告凭据存在性，不输出密钥。
+基础运行只需 `requirements.txt`；使用 CI 流程中的 pytest 复验或开发测试时，再安装 `requirements-dev.txt`。`doctor` 只报告凭据存在性，不输出密钥。
 
 ## 模型配置
 

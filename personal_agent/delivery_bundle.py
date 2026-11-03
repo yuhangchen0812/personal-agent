@@ -31,7 +31,7 @@ Linux/macOS 安装依赖后使用 `python run_demo.py doctor` 和 `python run_de
 
 真实 Agent 启动：`python run_agent.py --help`；Windows 为 `.\\run.cmd --help`。
 真实任务需自行通过环境变量或本地 .env 提供模型配置，模板为 .env.example；首次请求前核对所选模型。
-本包不包含 pytest 开发依赖、verify.cmd 或 codex 历史验收脚本。CI 示例重放如需 pytest，应另装对应开发依赖。
+本包不包含 tests/、scripts/、开发依赖、verify.cmd 或开发过程记录。CI 示例工程如需 pytest，应另行安装源码仓库 requirements-dev.txt 指定的版本。
 容器配置仅为待目标环境验证的文件；doctor container 检查不代表已经构建/运行镜像。
 """
 

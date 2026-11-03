@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_repair_eval import verify_guards, verify_workflow
+from tests.support.verify_repair_eval import verify_guards, verify_workflow
 
 
 class RepairEvalTests(unittest.TestCase):

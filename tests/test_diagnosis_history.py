@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_diagnosis_history import verify_workflow
+from tests.support.verify_diagnosis_history import verify_workflow
 
 
 class DiagnosisHistoryTests(unittest.TestCase):

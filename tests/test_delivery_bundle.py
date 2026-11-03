@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_delivery_bundle import verify_workflow
+from tests.support.verify_delivery_bundle import verify_workflow
 
 
 class DeliveryBundleTests(unittest.TestCase):

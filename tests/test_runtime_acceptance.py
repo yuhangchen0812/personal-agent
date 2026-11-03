@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_runtime_acceptance import verify_joint
+from tests.support.verify_runtime_acceptance import verify_joint
 
 
 class RuntimeAcceptanceTests(unittest.TestCase):

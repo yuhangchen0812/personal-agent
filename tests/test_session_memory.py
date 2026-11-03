@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_session_memory import verify_failures_and_compatibility, verify_workflow
+from tests.support.verify_session_memory import verify_failures_and_compatibility, verify_workflow
 
 
 class SessionMemoryTests(unittest.TestCase):

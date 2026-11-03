@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_eval_adoption import verify_guards, verify_workflow
+from tests.support.verify_eval_adoption import verify_guards, verify_workflow
 
 
 class EvalAdoptionTests(unittest.TestCase):

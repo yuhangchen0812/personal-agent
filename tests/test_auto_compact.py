@@ -29,7 +29,7 @@ class AutoCompactSmokeTest(unittest.TestCase):
             {"role": "assistant", "content": "仍在等待批准。"},
         ]
         second_question = "第二问仍只读。" + "最近任务详情。" * 200
-        from codex.verify_session_memory import memory
+        from tests.support.verify_session_memory import memory
         summary = memory()
         summary["episode_memory"]["task_description"] = "整理报告 A-23。"
         requests = []

@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_project_import import verify_workflow
+from tests.support.verify_project_import import verify_workflow
 
 
 class ProjectImportTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_repair_workflow import verify_workflow
+from tests.support.verify_repair_workflow import verify_workflow
 
 
 class RepairWorkflowTests(unittest.TestCase):

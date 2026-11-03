@@ -1,6 +1,6 @@
 import unittest
 
-from codex.verify_evidence_limits import verify_guards, verify_workflow
+from tests.support.verify_evidence_limits import verify_guards, verify_workflow
 
 
 class EvidenceLimitsTests(unittest.TestCase):

@@ -13,7 +13,7 @@ import httpx2
 from anthropic import Anthropic, AuthenticationError
 from anthropic.types import Message
 
-from codex.verify_dual_protocol import response, verify_offline
+from tests.support.verify_dual_protocol import response, verify_offline
 from personal_agent.anthropic_adapter import normalize_usage, parse_message, prepare_messages
 from personal_agent.config import get_model_settings, load_model_config
 from personal_agent.llm import get_model_message, stream_model_message

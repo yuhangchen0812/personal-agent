@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_junit_ci import verify_guards, verify_workflow
+from tests.support.verify_junit_ci import verify_guards, verify_workflow
 
 
 class JunitCiTests(unittest.TestCase):

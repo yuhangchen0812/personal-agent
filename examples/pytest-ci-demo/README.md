@@ -7,7 +7,7 @@
 完整离线演示：
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -B -m examples.ci_walkthrough
+.\.venv\Scripts\python.exe -X utf8 -B -m tests.support.ci_walkthrough
 ```
 
-运行产生的报告保存在独立的新目录。不要改写历史回执或把已观察样本称为新的盲测。
+此复现入口需要完整源码仓库与开发依赖，不随运行包分发。运行产生的报告保存在独立的新目录。

@@ -1,69 +1,62 @@
-# 演示与测试
+# 测试与验证
 
-## 安装开发依赖
+使用 Python 3.12，在源码仓库根目录安装开发依赖：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-测试使用固定响应、SDK 消息对象或本地模拟 HTTP；不需要真实模型密钥。CI 任务中执行 pytest 的子进程使用自编工程副本，故意保留初始失败和回归失败。
+## 目录职责
 
-## 三个演示入口
+- `tests/test_*.py`：运行时、权限、恢复、协议和 CI 工作流的正式回归测试。
+- `tests/support/`：测试共用的固定响应、隔离工作区与集成检查。
+- `tests/fixtures/`：自编工程、预期失败、回归数据和评估清单；不属于应用源码。
+- `scripts/verify.py`：分组验证、超时与取消、日志、汇总及源码指纹。
 
-| 入口 | 验证内容 |
-| --- | --- |
-| `.\demo.cmd` | 文件读写、Plan 与审批、HTML 和报告 |
-| `python -m examples.agent_loop_walkthrough` | 成功/拒绝/上限三条消息流，执行入口和处理函数分别计数 |
-| `python -m examples.ci_walkthrough` | CI 诊断、差异审阅、公开/独立复验、拒绝回归、采纳后回滚 |
+测试默认使用固定响应或本地模拟 HTTP，不需要模型密钥。涉及 pytest 的子进程在临时工程副本中执行。测试数据中故意保留的失败，用于检验诊断、回归拒绝和回滚；不要单独扫描整个 fixtures 目录并期待全部通过。
 
-使用项目虚拟环境中的 Python 执行命令。每次演示创建新的 `.personal` 目录，不覆盖旧结果。
+## 执行检查
 
-## 本地测试
-
-运行完整的离线默认验收：
+Windows 一键运行分组验证：
 
 ```powershell
 .\verify.cmd
 ```
 
-当前共 28 组，包含新增的 core_unit 核心回归组，以及工具、协议、恢复和应用集成组。总控保留逐组 JSON、日志及汇总，检查源码在运行前后是否一致；默认不请求模型、不要求私人历史文件。也可指定新报告目录：
+等价的 Python 入口，可指定尚不存在的报告目录：
 
 ```powershell
-.\verify.cmd --output-dir .personal/verification-example
+.\.venv\Scripts\python.exe -X utf8 -B scripts/verify.py --output-dir .personal/verification-example
 ```
 
-按文件检查核心循环与路径规则：
+默认报告保存在 `.personal/verification/`，不会写入测试源码目录。每组都有 JSON 和日志；汇总检查工作区源码在执行前后是否一致。总控只依据当前运行结果，不依赖个人历史报告。
 
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p test_agent.py
-.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p test_tools.py
-.\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p test_agent_config.py
-```
-
-全量 unittest discovery：
+完整回归测试：
 
 ```powershell
 .\.venv\Scripts\python.exe -X utf8 -B -m unittest discover -s tests -p "test_*.py"
 ```
 
-全量 unittest 和默认分组中存在共用流程，计数不能相加。tests 中部分用例复用 codex 验证模块，因此不要删除 codex Python 文件。
+单独检查核心循环：
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -B -m unittest tests.test_agent
+```
+
+分组验证和全量 unittest 会复用流程，测试计数不能相加。`--live` 仅在显式指定时请求配置的模型服务，会产生实际用量；默认验证不使用它。
+
+## 流程复现
+
+- `.\demo.cmd`：运行包也能使用的文件、Plan 与审批示例。
+- `python -m tests.support.agent_loop_walkthrough`：源码仓库中的成功、拒绝和次数上限轨迹。
+- `python -m tests.support.ci_walkthrough`：源码仓库中的诊断、候选复验、回归拒绝、采纳及回滚。详见 [CI 流程复现](DEMO.md)。
+
+上述固定响应检查证明执行链路，不代表实时模型质量。
 
 ## GitHub Actions
 
-[Windows CI](../.github/workflows/windows-ci.yml) 使用同一个总控运行 28 个默认组，保留逐组 JSON、日志、汇总和源码指纹，不配置模型密钥、不运行 live_smoke。容器配置有单独的[验收工作流](../.github/workflows/container-acceptance.yml)，镜像中 examples 或 playground/README.md 变化也会触发检查。
+[Windows CI](../.github/workflows/windows-ci.yml) 使用同一分组总控，保留 JSON、日志、汇总和源码指纹，不配置模型密钥。完整 unittest discovery 另列一步，覆盖全部正式测试。
 
-有完整本机历史报告时可显式使用 `.\verify.cmd --history`。此模式仍会核对历史字段和文件；缺失或失败会导致总结果失败，不会重新调用历史模型，也不会将缺失文件当作通过。
+[容器检查](../.github/workflows/container-acceptance.yml) 在独立 Linux 环境构建并运行镜像，检查进程、权限、持久化和停止信号。镜像所需源码、示例及配置变化会触发该工作流。修改后的远端验证结果应以对应提交的 Actions 为准，本地模拟引擎通过不能代替真实容器运行。
 
-汇总保留旧版 m3 兼容字段；本地总控不据此判断跨环境全面完成。实际部署结果以独立工作流和对应提交的报告为准。
-
-原始公开提交的 Windows 与 Linux 容器均已远端运行通过；后续提交应检查各自的实际工作流状态。验证范围和链接见 [VALIDATION.md](VALIDATION.md)。
-
-## 怎样解释结果
-
-- 固定响应验证的是执行链路，不是实时模型质量。
-- completed 表示循环结束；evaluated 表示测量完成；published 表示本地报告生成。
-- 自编 holdout 分组不是第三方盲测；已观察的样本不能继续作为未见证据。
-- 公开测试通过后仍可能新增回归；没有独立测试时，不能据公开结果宣称完整修复。
-- Windows Job 提供进程资源限制，不构成文件系统或网络安全沙箱。
-
-公开版实际核验记录见 [VALIDATION.md](VALIDATION.md)。
+运行包不包含 `tests/`、`scripts/`、CI 配置、开发依赖和本地报告。完整开发检查需使用源码仓库。

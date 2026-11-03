@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_repl_commands import verify_guards, verify_workflow
+from tests.support.verify_repl_commands import verify_guards, verify_workflow
 
 
 class ReplCommandTests(unittest.TestCase):

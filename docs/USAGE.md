@@ -44,16 +44,16 @@ Skill 声明不授予执行权限。候选演化改变的是方法文件及版�
 
 ## CI 工作流
 
-无需密钥的完整演示：
+完整源码仓库中的固定响应复现（需要开发依赖及 tests/fixtures）：
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -B -m examples.ci_walkthrough
+.\.venv\Scripts\python.exe -X utf8 -B -m tests.support.ci_walkthrough
 ```
 
-实际模型调查可以从已审阅的自编套件开始：
+在完整源码仓库中，实际模型调查也可以从已审阅的自编测试套件开始；处理自己的项目时需提供自己的套件清单：
 
 ```powershell
-.\task.cmd workflow create --suite examples/repair-eval/suite.json --output-dir .personal/my-ci-task --review-note "已审阅自编工程，允许在副本执行测试；候选另审"
+.\task.cmd workflow create --suite tests/fixtures/repair-eval/suite.json --output-dir .personal/my-ci-task --review-note "已审阅自编工程，允许在副本执行测试；候选另审"
 .\task.cmd workflow diagnose --task .personal/my-ci-task
 .\task.cmd workflow show --task .personal/my-ci-task
 ```

@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_structured_diagnosis import verify_guards, verify_workflow
+from tests.support.verify_structured_diagnosis import verify_guards, verify_workflow
 
 
 class StructuredDiagnosisTests(unittest.TestCase):

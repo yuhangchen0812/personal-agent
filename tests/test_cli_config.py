@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_cli_config import verify_inheritance, verify_protocol_and_permissions
+from tests.support.verify_cli_config import verify_inheritance, verify_protocol_and_permissions
 
 
 class CliConfigurationTests(unittest.TestCase):

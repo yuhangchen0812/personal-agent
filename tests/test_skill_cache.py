@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_skill_cache import verify_cli_and_boundaries, verify_reuse_and_external_changes
+from tests.support.verify_skill_cache import verify_cli_and_boundaries, verify_reuse_and_external_changes
 
 
 class SkillCacheTests(unittest.TestCase):

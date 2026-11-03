@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_delegation_delivery import run_suite
+from tests.support.verify_delegation_delivery import run_suite
 
 
 class DelegationDeliveryTests(unittest.TestCase):

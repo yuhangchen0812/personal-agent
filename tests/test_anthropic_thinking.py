@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from codex.verify_anthropic_thinking import thinking_events, verify_offline
+from tests.support.verify_anthropic_thinking import thinking_events, verify_offline
 from personal_agent.anthropic_adapter import parse_message, prepare_messages
 from personal_agent.anthropic_stream import MessageStream
 from personal_agent.config import anthropic_request_options, get_model_settings

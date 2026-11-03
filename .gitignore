@@ -10,9 +10,6 @@
 /playground/**
 !/playground/README.md
 !/playground/文件读取示例.txt
-/codex/*.json
-/codex/acceptance-runs/
-/codex/task-learning-runs/
 
 # Python and editor output
 __pycache__/

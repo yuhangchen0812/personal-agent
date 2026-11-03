@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_delivery import run_joint
+from tests.support.verify_delivery import run_joint
 
 
 class DeliveryTests(unittest.TestCase):

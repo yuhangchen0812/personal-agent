@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_qwen_messages import verify_workflow
+from tests.support.verify_qwen_messages import verify_workflow
 
 
 class QwenMessagesTests(unittest.TestCase):

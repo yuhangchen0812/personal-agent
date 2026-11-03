@@ -2,7 +2,7 @@
 
 import unittest
 
-from codex.verify_configured_tests import verify_guards, verify_workflow
+from tests.support.verify_configured_tests import verify_guards, verify_workflow
 
 
 class ConfiguredTests(unittest.TestCase):
