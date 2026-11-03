@@ -15,20 +15,19 @@ from .repl_commands import (
 
 from .agent import run_agent_loop
 from .agent_config import AgentDefinition, BUILTIN_AGENT_TYPES, discover_agents
-from .context import AutoCompactPolicy, compact_context, context_chars
+from .context import AutoCompactPolicy
+from .conversation import ConversationState
+from .project_memory import ProjectMemoryState
 from .config import get_model_settings, model_config_scope
 from .cancellation import termination_requested, termination_scope
 from .llm import MAX_REQUEST_RETRIES, get_model_message, stream_model_message
-from .memory import (
-    MemoryIndexCache, format_memory_freshness, list_memories, load_memory_index,
-    read_memory, rebuild_memory_index, save_memory, select_relevant_memory, with_memory_context,
-)
+from .memory import select_relevant_memory, with_memory_context
 from .permissions import READ_TOOLS, SUPPORTED_TOOLS, confirm_in_terminal
 from .mcp_client import McpError
 from .mcp_runtime import McpToolRuntime, load_mcp_config
 from .plan import PlanSession
 from .session import Session, validate_text_messages
-from .session_memory import SessionMemoryStore, compacted_history, generate_memory, with_session_memory
+from .session_memory import SessionMemoryStore, generate_memory, with_session_memory
 from .single_run import SingleRun, print_report, run_once
 from .skill_search import (
     format_retrieved_skill_context, retrieve_relevant_skills, with_skill_context,
@@ -115,8 +114,8 @@ def _run_repl(
     messages: list[dict] = []
     if session is not None and resume:
         messages = session.load()
-    session_memory_store = SessionMemoryStore(session) if session is not None else None
-    session_memory_record = (session_memory_store.read(session.session_memory)
+    memory_store = SessionMemoryStore(session) if session is not None else None
+    restored_memory = (memory_store.read(session.session_memory)
         if session is not None and session.session_memory is not None and session.session_memory["enabled"] else None)
     text_mode = (session is not None and not session.with_tools) or (stream and session is None and single_run is None)
     if mcp_config is not None and text_mode:
@@ -133,9 +132,11 @@ def _run_repl(
     evolution = SkillEvolutionStore()
     evaluator = SkillEvaluator()
     lifecycle = SkillLifecycleStore()
-    selected_memory: dict[str, str] | None = None
-    auto_memory = False
-    memory_index_cache = MemoryIndexCache()
+    conversation = ConversationState(
+        messages, session=session, plan=plan, auto_compact=auto_compact,
+        memory_store=memory_store, memory_record=restored_memory,
+    )
+    project_memory = ProjectMemoryState()
     skill_context = ""
     custom_agents: dict[str, AgentDefinition] = {}
     mcp = resources.enter_context(McpToolRuntime(load_mcp_config(mcp_config))) if mcp_config is not None else None
@@ -145,7 +146,6 @@ def _run_repl(
     for rules in (allow, deny):
         if rules is not None and (not isinstance(rules, list) or any(not isinstance(name, str) or name not in supported for name in rules)):
             raise ValueError("allow/deny 必须使用当前已注册的精确工具名；MCP 名称可通过 /mcp 查看。")
-    compaction_requested = False
     if single_run is not None:
         single_run.bind(model_settings, usage_stats, prices, max_cost, session, resume)
     print("Personal Agent 已启动。" if single_run is None else "Personal Agent 单次任务已启动。")
@@ -183,10 +183,10 @@ def _run_repl(
         print("后台反馈：/skill-learn 技能名 开启一次性窗口；/skill-learn auto [技能名] 开启连续学习，下一输入仍照常聊天；/skill-learn off 关闭；/skill-jobs [wait|cancel 任务ID|任务ID]。")
         print("使用记录：/skill-uses [技能名|任务ID] 核对实际加载版本与任务状态；/extract_now [提示] 提交显式或连续窗口并等待草稿，候选不自动采纳。")
         print("会话记忆：/session-memory show|save|compact|off|use [记录ID]|clear；具名会话的 /compact、自动及工具折叠共用独立记忆；停用后暂停这些折叠。")
-        if session_memory_record is not None:
-            print(f"已恢复独立会话记忆：{session_memory_record['id']}；仅供参考，历史工具不会重放。")
+        if conversation.memory_record is not None:
+            print(f"已恢复独立会话记忆：{conversation.memory_record['id']}；仅供参考，历史工具不会重放。")
 
-    turn_start = len(messages)
+    conversation.checkpoint()
 
     def save_progress(history: list[dict]) -> None:
         if session is not None:
@@ -206,7 +206,7 @@ def _run_repl(
             print(f"单次模式不读取审批输入，拒绝本次确认：{name}。", file=sys.stderr)
             return False
         if name == "exit_plan_mode" and session is not None:
-            save_progress(messages[:turn_start])
+            save_progress(conversation.completed_history)
         return confirm_in_terminal(name, arguments, reason)
 
     def execute_with_permissions(name: str, arguments: dict, *, allow_skill_fork: bool = True) -> str:
@@ -222,7 +222,7 @@ def _run_repl(
         )
         # 并发只读工具不改变 Plan；快照写入只留在主线程的状态/写入操作之后。
         if name not in READ_TOOLS and session is not None and session.with_tools and plan.plan_file is not None:
-            save_progress(messages[:turn_start])
+            save_progress(conversation.completed_history)
         return result
 
     def execute_subagent_tool(name: str, arguments: dict) -> str:
@@ -257,12 +257,11 @@ def _run_repl(
         return result.text
 
     def queue_compaction() -> str:
-        nonlocal compaction_requested
-        if memory_compaction_paused():
+        if conversation.compaction_paused:
             return f"{TOOL_ERROR_PREFIX}独立会话记忆已停用，未登记折叠；需用户显式 /session-memory use 或 compact。"
-        if compaction_requested:
+        if conversation.compaction_requested:
             return "本轮已经登记折叠请求，无需重复调用；实际折叠会在本轮成功结束后尝试。"
-        compaction_requested = True
+        conversation.compaction_requested = True
         return "已登记折叠请求；本轮成功结束后尝试整理旧轮次，当前任务完整保留，预算或校验失败时不折叠。"
 
     def search_mcp_tools(query: str, limit: int) -> str:
@@ -278,9 +277,9 @@ def _run_repl(
                 definitions = [*definitions, *active_definitions]
             else:
                 definitions = [tool for tool in definitions if tool["name"] != "tool_search"]
-        messages = with_session_memory(messages, session_memory_record)
-        if selected_memory is not None:
-            messages = with_memory_context(messages, selected_memory)
+        messages = with_session_memory(messages, conversation.memory_record)
+        if project_memory.selected is not None:
+            messages = with_memory_context(messages, project_memory.selected)
         messages = with_skill_context(messages, skill_context)
         if not text_mode:
             if session is not None:
@@ -347,55 +346,12 @@ def _run_repl(
             if on_usage_observer is not None:
                 on_usage_observer(reported)
 
-    def memory_compaction_paused() -> bool:
-        return session is not None and session.session_memory is not None and not session.session_memory["enabled"]
+    def summarize_context(request: list[dict]) -> dict:
+        return call_model_with_context(request, [], for_compaction=True)
 
-    def publish_session_memory(*, compact: bool) -> bool:
-        """三种折叠入口与显式 save/compact 共用；引用发布成功后才切换运行状态。"""
-        nonlocal turn_start, session_memory_record
-        reference = session.session_memory
-        previous = session_memory_store.read(reference) if reference is not None else None
-        generated = generate_memory(messages, lambda request: call_model_with_context(request, [], for_compaction=True),
-                                    previous=previous, compact=compact)
-        if generated is None:
-            return False
-        memory, history, source_count = generated
-        reference = session_memory_store.save(memory, history, source_count, compact=compact,
-                                              previous_id=previous["id"] if previous else None)
-        record = session_memory_store.read(reference)
-        candidate = compacted_history(history, record, previous=session_memory_record) if compact else history
-        snapshot = plan.snapshot() if session.with_tools else None
-        before = context_chars(with_session_memory(messages, session_memory_record))
-        session.save(candidate, plan=snapshot, session_memory=reference)
-        messages[:] = candidate
-        turn_start = len(messages)
-        session_memory_record = record
-        if compact:
-            after = context_chars(with_session_memory(messages, record))
-            print(f"上下文已折叠：JSON 字符数（含独立记忆参考）{before} → {after}；最近一轮保留。")
-        print(f"会话记忆已保存：{reference['id']}；启用；未执行记忆中的工具或计划。")
-        print(f"来源快照：{record['source_archive']}")
-        return True
 
     def perform_compaction() -> bool:
-        """具名会话使用独立记忆；无具名聊天保留原六字段摘要。"""
-        nonlocal turn_start
-        if session is not None:
-            if memory_compaction_paused():
-                raise ValueError("独立会话记忆已停用；先 /session-memory use，或显式 /session-memory compact。")
-            return publish_session_memory(compact=True)
-        result = compact_context(
-            messages, lambda request: call_model_with_context(request, [], for_compaction=True),
-        )
-        if result is None:
-            return False
-        candidate, archive = result
-        before, after = context_chars(messages), context_chars(candidate)
-        messages[:] = candidate
-        turn_start = len(messages)
-        print(f"上下文已折叠：JSON 字符数 {before} → {after}；最近一轮保留。")
-        print(f"原历史备份：{archive}")
-        return True
+        return conversation.compact(summarize_context, generate=generate_memory)
 
     jobs = SkillDraftJobs(
         lambda request, observer: get_model_message(request, on_usage=observer, max_tokens=evaluation_settings["max_tokens"]),
@@ -449,57 +405,7 @@ def _run_repl(
         command = user_input.split(maxsplit=1)[0].lower() if single_run is None else ""
 
         if command == "/session-memory":
-            parts = user_input.split()
-            action = parts[1].lower() if len(parts) > 1 else "show"
-            if (action not in {"show", "save", "compact", "off", "use", "clear"}
-                    or len(parts) > (3 if action == "use" else 2)):
-                print("用法：/session-memory show|save|compact|off|use [记录ID]|clear。")
-                continue
-            if session is None:
-                print("独立 session-memory 需要 --session NAME 或 --resume NAME。", file=sys.stderr)
-                continue
-            try:
-                reference = session.session_memory
-                if action == "show":
-                    if reference is None:
-                        print("当前会话没有绑定 session-memory；save 保留历史，compact 折叠旧轮次。")
-                    else:
-                        record = session_memory_store.read(reference)
-                        print(f"独立会话记忆：{reference['id']}；{'启用' if reference['enabled'] else '停用'}。")
-                        print(json.dumps(record["memory"], ensure_ascii=False, indent=2))
-                    continue
-                candidate, record = messages, None
-                if action in {"save", "compact"}:
-                    try:
-                        if not publish_session_memory(compact=action == "compact"):
-                            print("没有新增的已完成旧轮次可折叠；原历史和记忆保持不变。")
-                    finally:
-                        if action == "compact":
-                            auto_compact.remember(messages)
-                    continue
-                elif action == "clear":
-                    reference = None
-                elif action == "off":
-                    if reference is None:
-                        raise ValueError("当前没有绑定 session-memory。")
-                    reference = {**reference, "enabled": False}
-                elif action == "use":
-                    reference = session_memory_store.reference(parts[2]) if len(parts) == 3 else ({**reference, "enabled": True} if reference else None)
-                    record = session_memory_store.read(reference)
-                snapshot = plan.snapshot() if session.with_tools else None
-                # 不可变记录可先写入；只有会话引用成功替换后，才改变运行中的历史/上下文。
-                session.save(candidate, plan=snapshot, session_memory=reference)
-                messages[:] = candidate
-                turn_start = len(messages)
-                session_memory_record = record if reference is not None and reference["enabled"] else None
-                print("独立会话记忆已解除绑定；历史记录保留。" if reference is None else
-                      f"会话记忆已保存：{reference['id']}；{'启用' if reference['enabled'] else '停用'}；未执行记忆中的工具或计划。")
-            except KeyboardInterrupt:
-                print("\n会话记忆操作已中断；请查看绑定和历史，已落盘的记录保留。")
-            except MODEL_API_ERRORS as error:
-                print(f"会话记忆模型请求失败（{type(error).__name__}），当前绑定和历史未改变。", file=sys.stderr)
-            except (ValueError, OSError, RuntimeError) as error:
-                print(f"会话记忆操作失败：{error}", file=sys.stderr)
+            conversation.handle_memory_command(user_input, summarize_context, generate=generate_memory)
             continue
 
         if single_run is None and user_input.lower() == "exit":
@@ -518,7 +424,7 @@ def _run_repl(
                 print("Plan 切换需要工具聊天；具名会话请用 --session NAME --with-tools，流式临时聊天请创建工具会话。", file=sys.stderr)
             else:
                 # 本地命令之间没有未完成的新轮次，审批检查点须保存全部已完成历史。
-                turn_start = len(messages)
+                conversation.checkpoint()
                 tool = "exit_plan_mode" if plan.state != "executing" or len(parts) == 2 else "enter_plan_mode"
                 try:
                     print(execute_tool(tool, {}, plan=plan, allow=allow, deny=deny, confirm=confirm_with_checkpoint))
@@ -651,62 +557,17 @@ def _run_repl(
             except (ValueError, OSError, RuntimeError) as error:
                 print(f"折叠失败：{error} 原上下文保留。", file=sys.stderr)
             finally:
-                auto_compact.remember(messages)
+                conversation.auto_compact.remember(messages)
             continue
 
         if command == "/memory":
-            parts = user_input.split(maxsplit=3)
-            try:
-                if len(parts) == 1:
-                    entries = list_memories()
-                    print("项目记忆：\n" + "\n".join(f"- {entry['name']} [{entry['type']}] 更新于 {entry['updated_at']}（UTC）" for entry in entries) if entries else "当前项目暂无长期记忆。")
-                    print(f"当前选用：{selected_memory['name']}。" if selected_memory else "当前未选用记忆。")
-                    if selected_memory is not None:
-                        print(format_memory_freshness(selected_memory))
-                    print("记忆模式：自动，每轮重新匹配。" if auto_memory else "记忆模式：手动。")
-                elif len(parts) == 4 and parts[1].lower() == "save":
-                    memory_index_cache.clear()
-                    save_memory(parts[2], parts[3])
-                    print(f"已保存项目记忆：{parts[2]}。")
-                elif len(parts) == 3 and parts[1].lower() == "read":
-                    entry = read_memory(parts[2])
-                    print(f"项目记忆：{entry['name']} [{entry['type']}]\n{format_memory_freshness(entry)}\n{entry['content']}")
-                elif len(parts) == 3 and parts[1].lower() == "use":
-                    selected_memory = read_memory(parts[2])
-                    auto_memory = False
-                    memory_index_cache.clear()
-                    print(f"已选用项目记忆：{selected_memory['name']}；/memory off 停止使用。")
-                    print(format_memory_freshness(selected_memory))
-                elif len(parts) == 2 and parts[1].lower() == "auto":
-                    selected_memory = None
-                    auto_memory = True
-                    memory_index_cache.clear()
-                    print("已开启自动记忆选择，每轮最多匹配一条；/memory off 关闭。")
-                    try:
-                        memory_index_cache.load()
-                    except (ValueError, OSError) as error:
-                        print(f"记忆索引预取失败：{error} 后续提问时会重试加载。", file=sys.stderr)
-                elif len(parts) == 2 and parts[1].lower() == "off":
-                    selected_memory = None
-                    auto_memory = False
-                    memory_index_cache.clear()
-                    print("已关闭记忆选用及自动选择；已有聊天历史保留。")
-                elif len(parts) == 2 and parts[1].lower() == "index":
-                    memory_index_cache.clear()
-                    rebuild_memory_index()
-                    print(load_memory_index())
-                else:
-                    print("用法：/memory；/memory save 名称 正文；/memory read 名称；/memory use 名称；/memory auto；/memory off；/memory index。")
-            except (ValueError, OSError) as error:
-                print(f"记忆操作失败：{error}", file=sys.stderr)
+            project_memory.handle_command(user_input)
             continue
 
         if single_run is None and user_input.lower() == "/clear":
             # 先保存空历史，成功后再清内存，避免磁盘失败时丢失当前上下文。
             try:
-                if session is not None:
-                    snapshot = plan.snapshot() if session.with_tools else None
-                    session.save([], plan=snapshot, session_memory=None)
+                conversation.save_empty_history()
             except (ValueError, OSError, RuntimeError) as error:
                 print(f"清空失败：{error} 当前会话历史保留。", file=sys.stderr)
                 continue
@@ -715,13 +576,9 @@ def _run_repl(
             except (ValueError, OSError) as error:
                 print(f"反馈窗口已关闭，取消回执未保存（{type(error).__name__}）；已发出请求仍会结算。", file=sys.stderr)
             learning.reset()
-            messages.clear()
-            session_memory_record = None
-            turn_start = 0
-            selected_memory = None
-            auto_memory = False
-            memory_index_cache.clear()
-            auto_compact.reset()
+            conversation.clear_history()
+            project_memory.reset()
+            conversation.auto_compact.reset()
             skill_context = ""
             if tool_catalog is not None:
                 tool_catalog.reset()
@@ -802,7 +659,7 @@ def _run_repl(
             print("技能将作为独立子任务执行。" if prepared_skill.skill.context == "fork" else "技能已展开，将在当前对话中执行。")
 
         fork_skill = prepared_skill is not None and prepared_skill.skill.context == "fork"
-        if not fork_skill and not memory_compaction_paused() and auto_compact.should_compact(messages):
+        if not fork_skill and not conversation.compaction_paused and conversation.auto_compact.should_compact(messages):
             print("历史达到自动折叠阈值，正在检查旧轮次……")
             try:
                 perform_compaction()
@@ -816,10 +673,9 @@ def _run_repl(
             except (ValueError, OSError, RuntimeError) as error:
                 print(f"自动折叠失败：{error} 保留原上下文继续本轮请求。", file=sys.stderr)
             finally:
-                auto_compact.remember(messages)
+                conversation.auto_compact.remember(messages)
 
-        turn_start = len(messages)
-        compaction_requested = False
+        conversation.begin_turn()
         skill_context = ""
         custom_agents = {}
         learning.begin(turn_input)
@@ -851,18 +707,8 @@ def _run_repl(
                 except (ValueError, OSError) as error:
                     skill_context = ""
                     print(f"技能候选检索失败：{error} 本轮不提供候选，继续当前任务。", file=sys.stderr)
-            if auto_memory and not fork_skill:
-                selected_memory = None
-                settle_model_budget()
-                try:
-                    selected_memory = select_relevant_memory(user_input, index_cache=memory_index_cache)
-                except (ValueError, OSError) as error:
-                    memory_index_cache.clear()
-                    print(f"记忆选择失败：{error} 本轮未加载项目记忆。", file=sys.stderr)
-                else:
-                    print(f"自动选用项目记忆：{selected_memory['name']}。" if selected_memory else "未匹配到相关项目记忆。")
-                    if selected_memory is not None:
-                        print(format_memory_freshness(selected_memory))
+            if project_memory.automatic and not fork_skill:
+                project_memory.select_for_turn(user_input, selector=select_relevant_memory, before_select=settle_model_budget)
             settle_model_budget()
             if fork_skill:
                 assistant_reply = delegate_skill(prepared_skill)
@@ -874,9 +720,9 @@ def _run_repl(
         except KeyboardInterrupt as error:
             finish_skill_task("cancelled")
             if single_run is not None:
-                single_run.capture(messages[turn_start:])
+                single_run.capture(conversation.turn_messages)
                 single_run.fail(error, cancelled=True)
-            del messages[turn_start:]
+            conversation.rollback_turn()
             if session is not None and session.with_tools:
                 save_progress(messages)
             print("\n已中断本轮任务，本轮消息未保存。")
@@ -884,9 +730,9 @@ def _run_repl(
         except MODEL_API_ERRORS as error:
             finish_skill_task("failed")
             if single_run is not None:
-                single_run.capture(messages[turn_start:])
+                single_run.capture(conversation.turn_messages)
                 single_run.fail(error)
-            del messages[turn_start:]
+            conversation.rollback_turn()
             if session is not None and session.with_tools:
                 save_progress(messages)
             status = getattr(error, "status_code", None)
@@ -898,9 +744,9 @@ def _run_repl(
         except (ValueError, OSError, RuntimeError) as error:
             finish_skill_task("failed")
             if single_run is not None:
-                single_run.capture(messages[turn_start:])
+                single_run.capture(conversation.turn_messages)
                 single_run.fail(error)
-            del messages[turn_start:]
+            conversation.rollback_turn()
             if session is not None and session.with_tools:
                 save_progress(messages)
             print(f"本轮请求失败：{error} 本轮消息未保存。", file=sys.stderr)
@@ -911,9 +757,9 @@ def _run_repl(
         save_progress(messages)
         finish_skill_task("loop_completed", assistant_reply)
         if single_run is not None:
-            single_run.complete(assistant_reply, messages[turn_start:])
-        if compaction_requested:
-            compaction_requested = False
+            single_run.complete(assistant_reply, conversation.turn_messages)
+        if conversation.compaction_requested:
+            conversation.compaction_requested = False
             try:
                 if not perform_compaction():
                     print("工具登记的折叠无需处理：暂无可折叠的旧轮次。")
@@ -924,7 +770,7 @@ def _run_repl(
             except (ValueError, OSError, RuntimeError) as error:
                 print(f"工具登记的折叠失败：{error} 本轮任务结果保留。", file=sys.stderr)
             finally:
-                auto_compact.remember(messages)
+                conversation.auto_compact.remember(messages)
 
     return messages
 
